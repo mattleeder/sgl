@@ -1,0 +1,207 @@
+All data is stored in pages
+All bytes are big endian unless specified.
+
+Page 1 Starts With a 100 Byte Header then is followed by b-tree page header
+Every other Page starts with b-tree page header
+
+
+B-tree page header
+    - 1 Byte flag for page type
+    - 2 Bytes for the first freeblock
+    - 2 Bytes for the number of cells on the page
+    - 2 Bytes for the start of the cell content area
+    - 1 Byte for the number of fragmented free Bytes
+    - 4 Bytes for right most pointer. Only in interior pages.
+
+Immediately After the B-tree page header is the cell pointer array. 
+This holds 2 byte integer offsets to cell contents.
+
+
+
+There are 4 page types
+    - Interior Index
+    - Leaf Index
+    - Interior table
+    - Leaf table
+
+
+The contents of a cell depend on the page type. A lot include payload info.
+
+Interior Index cell
+    - 4 Bytes for left child pointer
+    - Varint for total number of bytes of the payload, including overflow.
+    - The initial portion of the payload that does not spill to overflow pages.
+    - 4 Bytes for the first page of the overflow page list. Omitted if all the payload 
+      fits.
+
+Leaf Index cell
+    - Varint for total number of bytes of the payload, including overflow.
+    - The initial portion of the payload that does not spill to overflow pages.
+    - A 4-byte big-endian integer page number for the first page of the overflow 
+      page list - omitted if all payload fits on the b-tree page. 
+
+Interior Table Cell
+    - A 4-byte big-endian page number which is the left child pointer.
+    - A varint which is the integer key (rowids >= to the integer key are in the 
+      right child)
+
+Leaf Table Cell
+    - A varint which is the total number of bytes of payload, including any overflow
+    - A varint which is the integer key, a.k.a. "rowid"
+    - The initial portion of the payload that does not spill to overflow pages.
+    - A 4-byte big-endian integer page number for the first page of the overflow 
+      page list - omitted if all payload fits on the b-tree page.
+
+
+
+Overflow pages form a linked list and are used when payload doesnt fit onto the first page.
+
+Overflow page
+    - 4 Bytes for the page number of the next page. If this is zero, this is the last page.
+    - Overflow content is held from 5th byte to last usable byte.
+
+The number of usable bytes on a page is the page size - reserved space. Both found
+in the database header.
+
+
+
+All payloads are in the record format. This format consists of a header and body.
+
+Record Header
+    - Varint for header size. (Including the number of bytes for this varint).
+    - One or more additional varints per column. These hold the serial types for each 
+      column which determines their size.
+
+Record body
+    - Holds column data with the size of each column determined by the record header. 
+      These columns depend on the page type.
+
+Interior Index Page
+    - Holds values for each column included in the index, followed by the rowid. 
+      (This does not neccesarily represent a row that exists. But is used for searching)
+
+Leaf Index Page
+    - Holds values for each column included in the index, followed by the rowid.
+
+Interior Table Page
+    This page does not hold any records.
+
+Leaf Table Page
+    - Holds values for each column in the table, i.e. holds an actual row. Note: if the
+      first column is an integer ID (i.e. the row number) the first column will be NULL
+      and the value should be filled in by the rowid held in the cell.
+
+
+The Record Header and Record Body for the schema table have a given format.
+
+CREATE TABLE sqlite_schema(
+  type text,
+  name text,
+  tbl_name text,
+  rootpage integer,
+  sql text
+);
+
+    - 'type' holds one of four values:
+        - 'table'
+        - 'index'
+        - 'view'
+        - 'trigger'
+    - 'name' holds the name of the object.
+    - 'tbl_name' holds the name of the table or view the object is associated with. (For 
+      a table or view this is a copy of 'name').
+    - 'rootpage' stores the for tables and indexes. NULL or 0 for views, 
+      triggers and virtual tables.
+    - 'sql' stores SQL text that describes the object. 
+      It will hold one of the following statements:
+        - CREATE_TABLE
+        - CREATE_VIRTUAL_TABLE
+        - CREATE_INDEX
+        - CREATE_VIEW
+        - CREATE_TRIGGER
+
+Enums we will need
+    - PageType
+    - Cell type? (Same as PageType?)
+    - ContentType
+    - ValueType
+    - Op type
+    - Expr type
+    - Aggregate Function
+
+
+Structs we will need
+
+    DB Information
+
+        - DatabaseHeader
+        - BTreePageHeader
+        - Cell (union of the 4 cell types)
+        - Overflow page
+        - RecordHeader
+        - RecordBody
+        - SchemaRecordHeader
+        - SchemaRecordBody
+        - Value (union of null/int/float/text)
+
+    Lexer
+    
+        - Scanner
+
+    Parser
+        
+        - Parser
+        
+        AST Elements
+
+            - SelectStatement
+            - FromStatement
+            - WhereStatement
+            - CreateTableStatement
+            - CreateIndexStatement
+
+            - Expr (union of integer/string/column/function/binary/unary/start)
+
+    Information Extracted From AST
+
+    - TableInfo
+        - Root page of table
+
+    - IndexInfo
+        - Root page of index
+        - Array of constraints
+
+    - Contraint info
+        - Op Type
+        - Left type
+        - Right type
+        - Left column index / value
+        - Right column index / value
+
+    - ColumnInfo
+        - Position of column in table/index 
+        - type?
+        - name start?
+        - name length?
+
+    - Row
+        - Column count
+        - Array of values
+
+    Planning
+
+        - Plan (union of project/aggregate/filter/scan)
+
+    Walking the btree
+
+        - BTreeCursor
+
+Data structures we will need
+    - Arrays
+    - HashMap
+
+
+
+Common Operations
+    - Read PageHeader   -> Read Cell Pointer Array
+    - Read Cell         -> Read RecordHeader            -> Read RecordBody

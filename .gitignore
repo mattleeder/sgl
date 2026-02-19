@@ -1,0 +1,14 @@
+# Database files used for testing
+*.db
+
+# Linker output
+*.exp
+
+# Libraries
+*.lib
+
+# Executables
+*.exe
+
+# Debug files
+*.pdb
