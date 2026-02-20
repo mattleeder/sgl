@@ -76,14 +76,12 @@ void free_record(struct Record *record);
 
 void read_cell_and_record(struct Pager *pager,
     struct PageHeader *page_header,
-    uint32_t page_number,
     struct Cell *cell,
     uint16_t cell_offset,
     struct Record *record);
 
 void read_cell_and_schema_record(struct Pager *pager,
     struct PageHeader *page_header,
-    uint32_t page_number,
     struct Cell *cell,
     uint16_t cell_offset,
     struct SchemaRecord *schema_record);

@@ -140,10 +140,10 @@ static void read_index_interior_cell(struct Pager *pager, const uint8_t *data, s
     }
 }
 
-void read_cell(struct Pager *pager, uint32_t page_number, struct PageHeader *page_header, struct Cell *cell, uint16_t cell_offset) {
-    struct Page *page = get_page(pager, page_number);
+void read_cell(struct Pager *pager, struct PageHeader *page_header, struct Cell *cell, uint16_t cell_offset) {
+    struct Page *page = get_page(pager, page_header->page_number);
     uint8_t *data = page->data + cell_offset;
-    cell->page_number = page_number;
+    cell->page_number = page_header->page_number;
     cell->cell_offset = cell_offset;
 
     switch (page_header->page_type) {

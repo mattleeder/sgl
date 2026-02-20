@@ -14,9 +14,6 @@ struct Parser {
 };
 
 struct ExprList *new_expr_list();
-void init_expr_list(struct ExprList *expr_list);
-void free_expr_list(struct ExprList *expr_list);
-void write_to_expr_list(struct ExprList *expr_list, struct Expr *expr);
 
 static struct ExprList *parse_expression_list(struct Parser *parser, struct Scanner *scanner);
 

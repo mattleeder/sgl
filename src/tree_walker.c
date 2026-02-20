@@ -181,7 +181,7 @@ void interior_table_step(struct SubWalker *walker, struct SubWalkerList *list, s
         mid = lo + (hi - lo) / 2;
                
         cell_offset = walker->cell_pointer_array[mid];
-        read_cell(walker->pager, walker->page, walker->page_header, walker->cell, cell_offset);
+        read_cell(walker->pager, walker->page_header, walker->cell, cell_offset);
         // fprintf(stderr, "lo: %d, hi: %d, mid: %d, integer key:%lld\n", lo, hi, mid, walker->cell->data.table_interior_cell.integer_key);
 
         if (walker->cell->data.table_interior_cell.integer_key >= *next_rowid) {
@@ -212,7 +212,7 @@ void interior_table_step(struct SubWalker *walker, struct SubWalkerList *list, s
     if ( result >= 0 && result < walker->page_header->number_of_cells) {
         // A left child
         next_child = walker->cell_pointer_array[result];
-        read_cell(walker->pager, walker->page, walker->page_header, walker->cell, next_child);
+        read_cell(walker->pager, walker->page_header, walker->cell, next_child);
         new_walker = new_sub_walker(walker->pager, walker->cell->data.table_interior_cell.left_child_pointer, walker->first_col_is_rowid, walker->index);
         // fprintf(stderr, "Begin walk from left child\n");
 
@@ -249,7 +249,7 @@ void leaf_table_step(struct SubWalker *walker, struct SubWalkerList *list, struc
         mid = lo + (hi - lo) / 2;
                 
         cell_offset = walker->cell_pointer_array[mid];
-        read_cell(walker->pager, walker->page, walker->page_header, walker->cell, cell_offset);
+        read_cell(walker->pager, walker->page_header, walker->cell, cell_offset);
         // fprintf(stderr, "lo: %d, hi: %d, mid: %d, rowid: %lld\n", lo, hi, mid, walker->cell->data.table_leaf_cell.row_id);
 
         if (walker->cell->data.table_leaf_cell.row_id == *next_rowid) {
@@ -325,7 +325,7 @@ void interior_index_step(struct SubWalker *walker, struct SubWalkerList *list, s
     if (mid < walker->page_header->number_of_cells) {
         pointer = walker->cell_pointer_array[mid];
         should_free = false;
-        read_cell(walker->pager, walker->page_header->page_number, walker->page_header, walker->cell, walker->cell_pointer_array[mid]);
+        read_cell(walker->pager, walker->page_header, walker->cell, walker->cell_pointer_array[mid]);
         uint32_t next_root_page = walker->cell->data.index_interior_cell.left_child_pointer;
         new_walker = new_sub_walker(walker->pager, next_root_page, false, walker->index);
     } else {

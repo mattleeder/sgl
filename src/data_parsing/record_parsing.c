@@ -326,23 +326,21 @@ static void read_schema_record(struct Pager *pager, struct Cell *cell, struct Sc
 
 void read_cell_and_record(struct Pager *pager,
     struct PageHeader *page_header,
-    uint32_t page_number,
     struct Cell *cell,
     uint16_t cell_offset,
     struct Record *record) 
 {
-    read_cell(pager, page_number, page_header, cell, cell_offset);
+    read_cell(pager, page_header, cell, cell_offset);
     read_record(pager, cell, record);
 }
 
 void read_cell_and_schema_record(struct Pager *pager,
     struct PageHeader *page_header,
-    uint32_t page_number,
     struct Cell *cell,
     uint16_t cell_offset,
     struct SchemaRecord *schema_record) 
 {
     struct Record record;
-    read_cell_and_record(pager, page_header, page_number, cell, cell_offset, &record);
+    read_cell_and_record(pager, page_header, cell, cell_offset, &record);
     interpret_record_as_schema_record(&record, schema_record);
 }

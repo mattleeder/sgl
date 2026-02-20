@@ -42,7 +42,6 @@ struct SchemaRecord *get_schema_record_for_table(struct Pager *pager, char *tabl
         read_cell_and_schema_record(
             pager,
             pager->schema_page_header,
-            1,
             &cell,
             schema_offsets[i],
             schema_record
@@ -76,7 +75,6 @@ uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_
         read_cell_and_schema_record(
             pager,
             pager->schema_page_header,
-            1,
             &cell,
             schema_offsets[i],
             &schema_record);
@@ -115,28 +113,41 @@ uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_
     return (uint32_t)0;
 }
 
-// static void init_columns(struct ColumnVector *columns) {
-//     mem_vec_init(&columns->vec);
-//     columns->data = NULL;
-// }
+struct IndexArray *get_all_indexes_for_table(struct Pager *pager, char* table_name) {
+    struct IndexArray *index_array = malloc(sizeof(struct IndexArray));
+    if (!index_array) {
+        fprintf(stderr, "get_all_indexes_for_table: failed to malloc *index_array.\n");
+        exit(1);
+    }
 
-// static void free_columns(struct ColumnVector *columns) {
-//     FREE_ARRAY(struct Column, columns->data, columns->vec.capacity);
-//     init_columns(columns);
-// }
+    struct PageHeader page_header;
+    uint16_t *cell_offsets = read_page_header_and_cell_pointer_array(pager, &page_header, 1);
 
-// static void write_column(struct ColumnVector *columns, struct Column column, const char *name_start, size_t length) {
-//     if (columns == NULL) {
-//         fprintf(stderr, "Writing to NULL struct Columns pointer.\n");
-//         exit(1);
-//     }
+    // @TODO: should not be creating new pool here
+    struct TriePool *pool = init_reserved_words();
 
-//     if (columns->vec.capacity < columns->vec.count + 1) {
-//         size_t old_capacity = columns->vec.capacity;
-//         columns->vec.capacity       = grow_capacity(old_capacity);
-//         columns->data               = GROW_ARRAY(struct Column, columns->data, old_capacity, columns->vec.capacity);
-//     }
+    struct Cell cell;
+    struct SchemaRecord record;
+    struct Parser parser_create_index;
 
-//     columns->data[columns->vec.count] = column;
-//     columns->vec.count++;
-// }
+    for (int i = 0; i < page_header.number_of_cells; i++) {
+        uint16_t offset = cell_offsets[i];
+        read_cell_and_schema_record(pager, &page_header, &cell, offset, &record);
+
+        if (strcmp(record.body.table_name, table_name) != 0) {
+            continue;
+        }
+
+        if (strcmp(record.body.schema_type, "index") != 0) {
+            continue;
+        }
+
+        struct CreateIndexStatement *stmt = parse_create_index(&parse_create_index, record.body.sql, pool);
+
+        struct IndexData index_data = { .root_page = record.body.root_page, .columns = stmt->indexed_columns };
+
+        push_index_array(index_array, index_data);
+    }
+
+    return index_array;
+}

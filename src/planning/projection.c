@@ -52,7 +52,7 @@ static bool projection_next(struct Pager *pager, struct Projection *projection, 
 
 
     for (int i = 0; i < projection->select_list->count; i++) {
-        struct Expr *current_expr = projection->select_list->list[i];
+        struct Expr *current_expr = &projection->select_list->data[i];
 
         switch (current_expr->type) {
 

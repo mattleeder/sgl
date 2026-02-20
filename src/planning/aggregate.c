@@ -47,7 +47,7 @@ static bool aggregate_next(struct Pager *pager, struct Aggregate *aggregate, str
     while (plan_next(pager, aggregate->child, row)) {
 
         for (int i = 0; i < aggregate->aggregates->count; i++) {
-            struct Expr *current_aggregate = aggregate->aggregates->list[i];
+            struct Expr *current_aggregate = &aggregate->aggregates->data[i];
             if (current_aggregate->type != EXPR_FUNCTION) {
                 fprintf(stderr, "Aggregate should be function.\n");
                 exit(1);

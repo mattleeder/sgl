@@ -71,7 +71,7 @@ void print_expression_list_to_stderr(struct ExprList *expr_list, int padding) {
 
     fprintf(stderr, "%*sExpressionList: %lld expressions\n", padding, "", expr_list->count);
     for (int i = 0; i < expr_list->count; i++) {
-        print_expression_to_stderr(expr_list->list[i], padding + 4);
+        print_expression_to_stderr(&expr_list->data[i], padding + 4);
     }
 }
 
@@ -146,7 +146,7 @@ struct Columns *get_columns_from_expression_list(struct ExprList *expr_list) {
 
     struct Expr *expr;
     for (int i = 0; i < expr_list->count; i++) {
-        expr = expr_list->list[i];
+        expr = &expr_list->data[i];
         get_column_from_expression(expr, columns);
     }
 

@@ -42,7 +42,7 @@ static bool expr_contains_aggregate(struct Expr *expr) {
 
 static bool expr_list_contains_aggregate(struct ExprList *expr_list) {
     for (int i = 0; i < expr_list->count; i++) {
-        if (expr_contains_aggregate(expr_list->list[i])) {
+        if (expr_contains_aggregate(&expr_list->data[i])) {
             return true;
         }
     }
@@ -56,7 +56,7 @@ static void collect_aggregates(struct ExprList *expr_list, struct Expr *expr) {
     }
 
     if (expr->type == EXPR_FUNCTION && is_aggregate_function(expr->function.name)) {
-        write_to_expr_list(expr_list, expr);
+        push_expr_list(expr_list, *expr);
     }
 }
 
@@ -79,7 +79,7 @@ struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt) {
     fprintf(stderr, "build_plan: collect aggregates:\n");
     struct ExprList *expr_list = new_expr_list();
     for (int i = 0; i < stmt->select_list->count; i++) {
-        collect_aggregates(expr_list, stmt->select_list->list[i]);
+        collect_aggregates(expr_list, &stmt->select_list->data[i]);
     }
     if (expr_list->count > 0) {
         fprintf(stderr, "Plan contains aggregates.\n");

@@ -213,7 +213,7 @@ static bool filter_next(struct Pager *pager, struct Filter *filter, struct Row *
 
         for (int i = 0; i < filter->predicates->count; i++) {
 
-            struct Expr *predicate = filter->predicates->list[i];
+            struct Expr *predicate = &filter->predicates->data[i];
             if (!evaluate_predicate(predicate, row, filter->columns)) {
                 predicate_success = false;
                 break;

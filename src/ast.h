@@ -3,6 +3,8 @@
 
 #include <stdint.h>
 
+#include "memory.h"
+
 enum AstNodeType {
     AST_SELECT,
     AST_FROM,
@@ -40,12 +42,6 @@ struct ExprColumn {
 
 enum AggType {
     AGG_COUNT
-};
-
-struct ExprList {
-    size_t          count;
-    size_t          capacity;
-    struct Expr     **list;
 };
 
 struct ExprFunction {
@@ -87,6 +83,8 @@ struct Expr {
         struct ExprUnary        unary;
     };
 };
+
+DEFINE_VECTOR(struct Expr, ExprList, expr_list)
 
 // Select Statement
 

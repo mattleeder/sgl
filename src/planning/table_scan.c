@@ -22,15 +22,62 @@ struct TableScan {
     struct Index        *index;
 };
 
-static void new_get_best_index(struct SelectStatement *stmt) {
+static struct IndexData *new_get_best_index(struct Pager *pager, struct SelectStatement *stmt) {
     if (stmt->where_list == NULL) {
         return NULL;
     }
 
     struct Columns *where_columns = get_columns_from_expression_list(stmt->where_list);
+    struct IndexArray *index_array = get_all_indexes_for_table(pager, stmt->from_table);
 
+    // Pick the index with the most matching columns
+    struct IndexData *best_index = malloc(sizeof(struct IndexData));
+    struct IndexData index_data;
+    struct Column index_column;
+    struct Column where_column;
+    int matching_columns = 0;
 
+    // @TODO: should be using hash map/set
+    for (int i = 0; i < index_array->count; i++) {
+        index_data = index_array->data[i];
 
+        for (int j = 0; j < index_data.columns->count; j++) {
+            index_column = index_data.columns->data[j];
+
+            for (int k = 0; k < where_columns->count; k++) {
+                where_column = where_columns->data[k];
+
+                if (where_column.name_length != index_column.name_length) {
+                    continue;
+                }
+
+                if (strncmp(where_column.name_start, index_column.name_start, index_column.name_length) != 0) {
+                    continue;
+                }
+
+                if (k > matching_columns) {
+                    matching_columns = k;
+                    best_index->columns     = index_data.columns;
+                    best_index->root_page   = index_data.root_page;
+                }
+            }
+        }
+    }
+
+    if (matching_columns > 0) {
+        fprintf(stderr, "Best index: \n");
+        for (int i = 0; i < best_index->columns->count; i++) {
+            struct Column col = best_index->columns->data[i];
+            fprintf(stderr, "    %d: %.*s\n", i, col.name_length, col.name_start);
+        }
+        return best_index;
+    }
+
+    free(best_index);
+    return NULL;
+    
+
+    // @TODO:
     // Identify all columns in where statment
     // Identify all matching indexes
     // Score columns based on where conditions
@@ -51,7 +98,7 @@ static struct Index *get_best_index(struct Pager *pager, struct SelectStatement 
     struct Index *index = NULL;
 
     for (int i = 0; i < stmt->where_list->count; i++) {
-        expr = stmt->where_list->list[i];
+        expr = &stmt->where_list->data[i];
         if (expr->type != EXPR_BINARY) {
             fprintf(stderr, "Currently only support index searching for binary predicates.\n");
             continue;

@@ -26,5 +26,6 @@ DEFINE_VECTOR(struct IndexData, IndexArray, index_array)
 
 struct SchemaRecord *get_schema_record_for_table(struct Pager *pager, char *table_name);
 uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_name, char *column_name_start, size_t column_name_length);
+struct IndexArray *get_all_indexes_for_table(struct Pager *pager, char* table_name);
 
 #endif

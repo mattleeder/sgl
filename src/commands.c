@@ -37,7 +37,6 @@ int command_tables(struct Pager *pager) {
         read_cell_and_schema_record(
             pager,
             pager->schema_page_header,
-            1,
             &cell,
             offsets[i],
             &schema_record

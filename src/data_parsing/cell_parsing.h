@@ -53,7 +53,6 @@ struct Cell {
 
 void read_cell(
     struct Pager *pager, 
-    uint32_t page_number, 
     struct PageHeader *page_header, 
     struct Cell *cell, 
     uint16_t cell_offset);

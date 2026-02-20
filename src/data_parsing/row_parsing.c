@@ -112,7 +112,6 @@ void read_cell_offset_into_row(struct Pager *pager, struct Row *row, struct Page
     read_cell_and_record(
         pager,
         page_header,
-        page_header->page_number,
         &cell,
         cell_offset,
         &record

@@ -22,28 +22,6 @@ static char *get_token_string(struct Token *token) {
     return buffer;
 }
 
-void init_expr_list(struct ExprList *expr_list) {
-    expr_list->count            = 0;
-    expr_list->capacity         = 0;
-    expr_list->list             = NULL;
-}
-
-void free_expr_list(struct ExprList *expr_list) {
-    FREE_ARRAY(struct Expr, expr_list->list, expr_list->capacity);
-    init_expr_list(expr_list);
-}
-
-void write_to_expr_list(struct ExprList *expr_list, struct Expr *expr) {
-    if (expr_list->capacity < expr_list->count + 1) {
-        int old_capacity = expr_list->capacity;
-        expr_list->capacity       = grow_capacity(old_capacity);
-        expr_list->list           = GROW_ARRAY(struct Expr *, expr_list->list, old_capacity, expr_list->capacity);
-    }
-
-    expr_list->list[expr_list->count]   = expr;
-    expr_list->count++;
-}
-
 struct ExprList *new_expr_list() {
     struct ExprList *expr_list = malloc(sizeof(struct ExprList));
     if (!expr_list) {
@@ -252,7 +230,7 @@ static struct ExprList *parse_expression_list(struct Parser *parser, struct Scan
 
     while (true) {
         struct Expr *expr = parse_expression(parser, scanner);
-        write_to_expr_list(expr_list, expr);
+        push_expr_list(expr_list, *expr);
 
         
         if (parser->current.type != TOKEN_COMMA) {
