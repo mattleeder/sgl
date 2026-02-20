@@ -5,6 +5,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "ast.h"
 #include "memory.h"
 #include "pager.h"
 
@@ -12,6 +13,7 @@
 
 struct IndexData {
     struct Columns  *columns;
+    struct ExprList *predicates;
     uint32_t        root_page;
 };
 

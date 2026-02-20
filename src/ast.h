@@ -85,6 +85,7 @@ struct Expr {
 };
 
 DEFINE_VECTOR(struct Expr, ExprList, expr_list)
+DEFINE_VECTOR(struct ExprBinary, BinaryExprList, binary_expr_list)
 
 // Select Statement
 
@@ -107,7 +108,6 @@ struct CreateIndexStatement {
     struct Columns  *indexed_columns;
 };
 
-
 void print_expr_star_to_stderr(int padding);
 void print_expr_column_to_stderr(struct Expr *expr, int padding);
 void print_expr_function_to_stderr(struct Expr *expr, int padding);
@@ -117,5 +117,6 @@ void print_expression_list_to_stderr(struct ExprList *expr_list, int padding);
 void print_select_statement_to_stderr(struct SelectStatement *stmt, int padding);
 
 struct Columns *get_columns_from_expression_list(struct ExprList *expr_list);
+struct IndexComparisonArray *get_index_comparisons(struct ExprList *expr_list);
 
 #endif

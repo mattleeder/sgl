@@ -1,8 +1,10 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 
 #include "ast.h"
 #include "sql_utils.h"
+#include "comparisons.h"
 
 void print_expr_star_to_stderr(int padding) {
     fprintf(stderr, "%*sStar\n", padding, "");
@@ -151,4 +153,41 @@ struct Columns *get_columns_from_expression_list(struct ExprList *expr_list) {
     }
 
     return columns;
+}
+
+struct IndexComparisonArray *get_index_comparisons(struct ExprList *expr_list) {
+    struct IndexComparisonArray *array = malloc(sizeof(struct IndexComparisonArray));
+    
+    if (!array) {
+        fprintf(stderr, "get_column_index_comparisons: failed to malloc *array.\n");
+        exit(1);
+    }
+
+    init_index_comparison_array(array);
+
+    struct Expr *expr;
+    for (int i = 0; i < expr_list->count; i++) {
+        expr = &expr_list->data[i];
+        
+        if (expr->type != EXPR_BINARY) {
+            continue;
+        }
+
+        struct Columns *columns = malloc(sizeof(struct Columns));
+        if (!columns) {
+            fprintf(stderr, "get_column_index_comparisons: failed to malloc columns\n");
+            exit(1);
+        }
+
+        get_column_from_expression(expr, columns);
+        if (columns->count == 0) {
+            free(columns);
+            continue;
+        }
+
+        struct IndexComparison comparison = { .binary = expr->binary, .columns = columns };
+        push_index_comparison_array(array, comparison);
+    }
+
+    return array;
 }

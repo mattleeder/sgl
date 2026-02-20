@@ -9,6 +9,7 @@
 #include "../data_parsing/page_parsing.h"
 #include "../data_parsing/record_parsing.h"
 #include "../tree_walker.h"
+#include "../comparisons.h"
 #include "plan.h"
 
 struct TableScan {
@@ -27,44 +28,90 @@ static struct IndexData *new_get_best_index(struct Pager *pager, struct SelectSt
         return NULL;
     }
 
-    struct Columns *where_columns = get_columns_from_expression_list(stmt->where_list);
+    struct IndexComparisonArray *comparison_array = get_columns_from_expression_list(stmt->where_list);
     struct IndexArray *index_array = get_all_indexes_for_table(pager, stmt->from_table);
 
     // Pick the index with the most matching columns
     struct IndexData *best_index = malloc(sizeof(struct IndexData));
-    struct IndexData index_data;
-    struct Column index_column;
-    struct Column where_column;
-    int matching_columns = 0;
-
-    // @TODO: should be using hash map/set
-    for (int i = 0; i < index_array->count; i++) {
-        index_data = index_array->data[i];
-
-        for (int j = 0; j < index_data.columns->count; j++) {
-            index_column = index_data.columns->data[j];
-
-            for (int k = 0; k < where_columns->count; k++) {
-                where_column = where_columns->data[k];
-
-                if (where_column.name_length != index_column.name_length) {
-                    continue;
-                }
-
-                if (strncmp(where_column.name_start, index_column.name_start, index_column.name_length) != 0) {
-                    continue;
-                }
-
-                if (k > matching_columns) {
-                    matching_columns = k;
-                    best_index->columns     = index_data.columns;
-                    best_index->root_page   = index_data.root_page;
-                }
-            }
-        }
+    if (!best_index) {
+        fprintf(stderr, "new_get_best_index: failed to malloc *best_index.\n");
+        exit(1);
     }
 
-    if (matching_columns > 0) {
+    best_index->columns     = NULL;
+    best_index->predicates  = NULL;
+    best_index->root_page   = 0;
+
+
+
+    struct IndexData index_data;
+    struct Column index_column;
+    struct IndexComparison comparison;
+    struct Column comparison_column;
+    int matching_columns_max = 0;
+    int matching_columns_cur = 0;
+    bool index_matches_all_columns;
+
+    // @TODO: should be using hash map/set
+    // For each index, compare it to all binary predicates containing columns
+    // If it contains all the columns in a predicate, then increment it
+    // by that many columns
+    // If the index has the most column matches it is the best index
+    for (int i = 0; i < index_array->count; i++) {
+        matching_columns_cur = 0;
+        index_data = index_array->data[i];
+
+        struct BinaryExprList *current_predicates = malloc(sizeof(struct BinaryExprList));
+        if (!current_predicates) {
+            fprintf(stderr, "new_get_best_index: failed to malloc *predicates.\n");
+            exit(1);
+        }
+        init_binary_expr_list(current_predicates);
+
+        for (int j = 0; j < comparison_array->count; j++) {
+            index_matches_all_columns = true;
+            comparison = comparison_array->data[j];
+            
+            for (int k = 0; k < comparison.columns->count; k++) {
+                comparison_column = comparison.columns->data[k];
+                
+                if (comparison_column.name_length != index_column.name_length) {
+                    index_matches_all_columns = false;
+                    break;
+                }
+                
+                if (strncmp(comparison_column.name_start, index_column.name_start, index_column.name_length) != 0) {
+                    index_matches_all_columns = false;
+                    break;
+                }
+                
+            }
+
+            if (!index_matches_all_columns) {
+                continue;
+            }
+
+            matching_columns_cur += comparison.columns->count;
+            push_binary_expr_list(current_predicates, comparison.binary);
+
+        }
+
+        if (matching_columns_cur > matching_columns_max) {
+            if (best_index->predicates != NULL) {
+                free_binary_expr_list(best_index->predicates);
+            }
+
+            matching_columns_max = matching_columns_cur;
+            best_index->columns     = index_data.columns;
+            best_index->predicates  = current_predicates;
+            best_index->root_page   = index_data.root_page;
+        } else {
+            free_binary_expr_list(current_predicates);
+        }
+
+    }
+
+    if (matching_columns_max > 0) {
         fprintf(stderr, "Best index: \n");
         for (int i = 0; i < best_index->columns->count; i++) {
             struct Column col = best_index->columns->data[i];

@@ -120,6 +120,8 @@ struct IndexArray *get_all_indexes_for_table(struct Pager *pager, char* table_na
         exit(1);
     }
 
+    init_index_array(index_array);
+
     struct PageHeader page_header;
     uint16_t *cell_offsets = read_page_header_and_cell_pointer_array(pager, &page_header, 1);
 

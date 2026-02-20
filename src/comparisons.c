@@ -107,27 +107,3 @@ bool compare_index_predicate(struct ExprBinary *predicate, struct Value *column_
 
 // I need a function that will take index constraints
 // and an index row and perform the comparisons
-enum CMP_VALUE_TYPE {
-    CMP_COLUMN,
-    CMP_VALUE
-};
-
-struct CmpColumnData {
-    uint64_t idx;
-};
-
-struct IndexComparison {
-    enum BinaryOp           op;
-    enum CMP_VALUE_TYPE     left_type;
-    enum CMP_VALUE_TYPE     right_type;
-
-    union {
-        struct CmpColumnData    column;
-        struct Value            value;
-    } left;
-
-    union {
-        struct CmpColumnData    column;
-        struct Value            value;
-    } right;
-};
