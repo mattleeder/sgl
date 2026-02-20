@@ -64,9 +64,10 @@ static struct Expr *new_expr(enum ExprType type) {
     return expr;
 }
 
-static struct Expr *make_column_expr(char *name) {
+static struct Expr *make_column_expr(char *start, size_t len) {
     struct Expr *expr = new_expr(EXPR_COLUMN);
-    expr->column.name = name;
+    expr->column.start  = start;
+    expr->column.len    = len;
     return expr;
 }
 
@@ -206,8 +207,7 @@ static struct Expr *parse_term(struct Parser *parser, struct Scanner *scanner) {
                 return parse_function_call(parser, scanner, function_name);
             }
 
-            char *column_name = get_token_string(&parser->previous);
-            return make_column_expr(column_name);
+            return make_column_expr(parser->previous.start, parser->previous.length);
 
         case TOKEN_STRING:
             return make_string_expr(parser);
@@ -332,7 +332,8 @@ struct Columns *parse_create(struct Parser *parser, const char *source, struct T
             error_at_current(parser, "Expected columnName.");
         }
         
-        write_column(columns, index, parser->current.start, parser->current.length);
+        struct Column column = { .index = index, .name_start = parser->current.start, .name_length = parser->current.length };
+        push_columns(columns, column);
         index++;
         
         advance(parser, &scanner);
@@ -364,7 +365,9 @@ static struct Columns *parse_indexed_column(struct Parser *parser, struct Scanne
         exit(1);
     }
 
-    write_column(columns, 0, parser->current.start, parser->current.length);
+    // @TODO: .index = 0?
+    struct Column column = { .index = 0, .name_start = parser->current.start, .name_length = parser->current.length };
+    push_columns(columns, column);
     advance(parser, scanner);
 
     while (parser->current.type == TOKEN_DOT) {
@@ -374,7 +377,11 @@ static struct Columns *parse_indexed_column(struct Parser *parser, struct Scanne
             exit(1);
         }
 
-        write_column(columns, 0, parser->current.start, parser->current.length);
+        column.index        = 0;
+        column.name_start   = parser->current.start;
+        column.name_length  = parser->current.length;
+
+        push_columns(columns, column);
         advance(parser, scanner);
     }
 
@@ -454,10 +461,9 @@ struct CreateIndexStatement *parse_create_index(struct Parser *parser, const cha
 
     fprintf(stderr, "\nIndex has columns: \n");
     for (int i = 0; i < stmt->indexed_columns->count; i++) {
-        char *column_name = stmt->indexed_columns->names[i];
-        size_t column_length = stmt->indexed_columns->name_lengths[i];
+        struct Column column =  stmt->indexed_columns->data[i];
 
-        fprintf(stderr, "\t%.*s\n", (int)column_length, column_name);
+        fprintf(stderr, "\t%.*s\n", (int)column.name_length, column.name_start);
     }
     fprintf(stderr, "\n");
 

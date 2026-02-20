@@ -14,7 +14,6 @@
 #include "parser.h"
 #include "sql_utils.h"
 
-
 // @TODO: need to actually use this
 bool add_overflow_size_t(size_t a, size_t b, size_t *out) {
     if (a > SIZE_MAX - b) {
@@ -23,7 +22,6 @@ bool add_overflow_size_t(size_t a, size_t b, size_t *out) {
     *out = a + b;
     return true;
 }
-
 
 struct SchemaRecord *get_schema_record_for_table(struct Pager *pager, char *table_name) {
     // Read schema
@@ -61,7 +59,7 @@ struct SchemaRecord *get_schema_record_for_table(struct Pager *pager, char *tabl
     exit(1);
 }
 
-uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_name, char *column_name) {
+uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_name, char *column_name_start, size_t column_name_length) {
     // Read schema
     int16_t number_of_tables = pager->schema_page_header->number_of_cells;
     uint16_t *schema_offsets = read_cell_pointer_array(pager, pager->schema_page_header);
@@ -100,9 +98,9 @@ uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_
             continue;
         }
 
-        size_t first_column_name_length = stmt->indexed_columns->name_lengths[0];
-        char *first_column_name         = stmt->indexed_columns->names[0];
-        if (strncmp(column_name, first_column_name, first_column_name_length) != 0) {
+        struct Column first_column = stmt->indexed_columns->data[0];
+
+        if (column_name_length != first_column.name_length || strncmp(column_name_start, first_column.name_start, first_column.name_length) != 0) {
             free_columns(stmt->indexed_columns);
             free(stmt);
             continue;
@@ -117,37 +115,28 @@ uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_
     return (uint32_t)0;
 }
 
-static void init_columns(struct Columns *columns) {
-    columns->count          = 0;
-    columns->capacity       = 0;
-    columns->indexes        = NULL;
-    columns->name_lengths   = NULL;
-    columns->names          = NULL;
-}
+// static void init_columns(struct ColumnVector *columns) {
+//     mem_vec_init(&columns->vec);
+//     columns->data = NULL;
+// }
 
-static void free_columns(struct Columns *columns) {
-    FREE_ARRAY(uint32_t, columns->indexes, columns->capacity);
-    FREE_ARRAY(size_t, columns->name_lengths, columns->capacity);
-    FREE_ARRAY(char*, columns->names, columns->capacity);
-    init_columns(columns);
-}
+// static void free_columns(struct ColumnVector *columns) {
+//     FREE_ARRAY(struct Column, columns->data, columns->vec.capacity);
+//     init_columns(columns);
+// }
 
-static void write_column(struct Columns *columns, uint32_t index, const char *name_start, size_t length) {
-    if (columns == NULL) {
-        fprintf(stderr, "Writing to NULL struct Columns pointer.\n");
-        exit(1);
-    }
+// static void write_column(struct ColumnVector *columns, struct Column column, const char *name_start, size_t length) {
+//     if (columns == NULL) {
+//         fprintf(stderr, "Writing to NULL struct Columns pointer.\n");
+//         exit(1);
+//     }
 
-    if (columns->capacity < columns->count + 1) {
-        size_t old_capacity = columns->capacity;
-        columns->capacity       = grow_capacity(old_capacity);
-        columns->indexes        = GROW_ARRAY(uint32_t, columns->indexes, old_capacity, columns->capacity);
-        columns->name_lengths   = GROW_ARRAY(size_t, columns->name_lengths, old_capacity, columns->capacity);
-        columns->names          = GROW_ARRAY(char *, columns->names, old_capacity, columns->capacity);
-    }
+//     if (columns->vec.capacity < columns->vec.count + 1) {
+//         size_t old_capacity = columns->vec.capacity;
+//         columns->vec.capacity       = grow_capacity(old_capacity);
+//         columns->data               = GROW_ARRAY(struct Column, columns->data, old_capacity, columns->vec.capacity);
+//     }
 
-    columns->indexes[columns->count]        = index;
-    columns->name_lengths[columns->count]   = length;
-    columns->names[columns->count]          = name_start;
-    columns->count++;
-}
+//     columns->data[columns->vec.count] = column;
+//     columns->vec.count++;
+// }

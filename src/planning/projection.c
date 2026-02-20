@@ -21,10 +21,16 @@ static struct Plan *make_projection(struct Plan *plan, struct ExprList *select_l
     }
 
     memset(projection, 0, sizeof *projection);
-    projection->base.type               = PLAN_PROJECTION;
-    projection->child                   = plan;
+    projection->base.type    = PLAN_PROJECTION;
+    projection->child        = plan;
     projection->select_list  = select_list;
     projection->columns      = columns;
+
+    for (int i = 0; i < columns->count; i++) {
+        struct Column column = columns->data[i];
+        fprintf(stderr, "make_projection: Column %d: %.*s\n", i, (int)column.name_length, column.name_start);
+    }
+
     return &projection->base;
 }
 
@@ -55,10 +61,11 @@ static bool projection_next(struct Pager *pager, struct Projection *projection, 
                 // Iterate over all columns, if there is a match move that value to column index
                 // and then increment
                 for (int j = 0; j < projection->columns->count; j++) {
-                    char *column_name   = projection->columns->names[j];
-                    size_t name_length  = projection->columns->name_lengths[j];
-                    uint32_t index      = projection->columns->indexes[j];
-                    if (strncmp(column_name, current_expr->column.name, name_length) == 0) {
+                    struct Column column = projection->columns->data[j];
+                    char *column_name   = column.name_start;
+                    size_t name_length  = column.name_length;
+                    uint32_t index      = column.index;
+                    if (name_length == current_expr->column.len && strncmp(column_name, current_expr->column.start, name_length) == 0) {
                         if (i != index) {
                             row->values[i] = original_row_order.values[index];
                         }

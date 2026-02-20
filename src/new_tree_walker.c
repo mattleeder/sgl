@@ -34,7 +34,7 @@
 
 // // Only handles equalities
 // struct IndexConstraints {
-//     const struct Binary * const     *keys;    // Binary expressions in the order columns appear in index
+//     const struct ExprBinary * const     *keys;    // Binary expressions in the order columns appear in index
 //     size_t                          key_count;
 //     uint32_t                        root_page;
 // };

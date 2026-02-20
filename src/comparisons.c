@@ -1,7 +1,8 @@
+#include "ast.h"
 #include "sql_utils.h"
 #include "data_parsing/row_parsing.h"
 
-struct Value get_predicate_value(struct Binary *predicate) {
+struct Value get_predicate_value(struct ExprBinary *predicate) {
     if (predicate->left->type == EXPR_COLUMN && predicate->right->type == EXPR_COLUMN) {
         fprintf(stderr, "get_predicate_value: Currently cannot handle multiple index.\n");
         exit(1);
@@ -64,7 +65,7 @@ int compare_values(struct Value *left, struct Value *right) {
     }
 }
 
-bool compare_index_predicate(struct Binary *predicate, struct Value *column_value, struct Value *predicate_value) {
+bool compare_index_predicate(struct ExprBinary *predicate, struct Value *column_value, struct Value *predicate_value) {
     // For use with binary search
     // Return true if hi should come down
     // Return false if lo should go up

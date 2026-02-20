@@ -24,17 +24,18 @@ enum ExprType {
     EXPR_STAR
 };
 
-struct Integer {
+struct ExprInteger {
     int64_t    value;
 };
 
-struct String {
+struct ExprString {
     char    *start;
     size_t  len;
 };
 
-struct Column {
-    char    *name;
+struct ExprColumn {
+    char    *start;
+    size_t  len;
 };
 
 enum AggType {
@@ -47,7 +48,7 @@ struct ExprList {
     struct Expr     **list;
 };
 
-struct Function {
+struct ExprFunction {
     enum AggType    agg_type;
     char            *name;
     struct ExprList *args;
@@ -59,18 +60,18 @@ enum BinaryOp {
     BIN_GREATER,
 };
 
-struct Binary {
+struct ExprBinary {
     struct Expr     *left;
     struct Expr     *right;
     enum BinaryOp   op;
 };
 
-struct Unary {
+struct ExprUnary {
     struct Expr     *right;
     int             op;
 };
 
-struct Star {
+struct ExprStar {
     int     tag;
 };
 
@@ -78,12 +79,12 @@ struct Expr {
     enum ExprType type;
 
     union {
-        struct Integer      integer;
-        struct String       string;
-        struct Column       column;
-        struct Function     function;
-        struct Binary       binary;
-        struct Unary        unary;
+        struct ExprInteger      integer;
+        struct ExprString       string;
+        struct ExprColumn       column;
+        struct ExprFunction     function;
+        struct ExprBinary       binary;
+        struct ExprUnary        unary;
     };
 };
 
@@ -116,5 +117,7 @@ void print_expr_binary_to_stderr(struct Expr *expr, int padding);
 void print_expression_to_stderr(struct Expr *expr, int padding);
 void print_expression_list_to_stderr(struct ExprList *expr_list, int padding);
 void print_select_statement_to_stderr(struct SelectStatement *stmt, int padding);
+
+struct Columns *get_columns_from_expression_list(struct ExprList *expr_list);
 
 #endif

@@ -2,6 +2,7 @@
 #include <stdlib.h>
 
 #include "ast.h"
+#include "sql_utils.h"
 
 void print_expr_star_to_stderr(int padding) {
     fprintf(stderr, "%*sStar\n", padding, "");
@@ -9,7 +10,7 @@ void print_expr_star_to_stderr(int padding) {
 
 void print_expr_column_to_stderr(struct Expr *expr, int padding) {
     fprintf(stderr, "%*sColumn\n", padding, "");
-    fprintf(stderr, "%*sName: %s\n", padding + 4, "", expr->column.name);
+    fprintf(stderr, "%*sName: %*s\n", padding + 4, "", expr->column.len, expr->column.start);
 }
 
 void print_expr_function_to_stderr(struct Expr *expr, int padding) {
@@ -110,4 +111,44 @@ void print_select_statement_to_stderr(struct SelectStatement *stmt, int padding)
     }
 
     fprintf(stderr, "\n\nPrinting Complete\n\n");
+}
+
+void get_column_from_expression(struct Expr *expr, struct Columns *columns) {
+    switch(expr->type) {
+        case EXPR_INTEGER:
+        case EXPR_STRING:
+        case EXPR_FUNCTION:
+            break;
+
+        case EXPR_COLUMN:
+            struct Column column = { .index = 0, .name_start = expr->column.start, .name_length = expr->column.len };
+            push_columns(columns, column);
+            break;
+
+        case EXPR_BINARY:
+            get_column_from_expression(expr->binary.left, columns);
+            get_column_from_expression(expr->binary.right, columns);
+            break;
+
+        case EXPR_UNARY:
+            get_column_from_expression(expr->unary.right, columns);
+            break;
+
+        default:
+            fprintf(stderr, "get_column_from_expression: unknown expr->type %d\n", expr->type);
+            exit(1);
+    }
+}
+
+struct Columns *get_columns_from_expression_list(struct ExprList *expr_list) {
+    struct Columns *columns = malloc(sizeof(struct Columns));
+    init_columns(columns);
+
+    struct Expr *expr;
+    for (int i = 0; i < expr_list->count; i++) {
+        expr = expr_list->list[i];
+        get_column_from_expression(expr, columns);
+    }
+
+    return columns;
 }

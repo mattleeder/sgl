@@ -7,6 +7,11 @@
 
 #define MIN_CAPACITY 8
 
+struct MemVec {
+    size_t  count;
+    size_t  capacity;
+};
+
 static inline size_t grow_capacity(size_t capacity) {
     size_t new_capacity = 0;
     if (capacity < MIN_CAPACITY) return MIN_CAPACITY;
@@ -21,6 +26,46 @@ static inline size_t grow_capacity(size_t capacity) {
 #define FREE_ARRAY(type, pointer, oldCount) \
     (reallocate(pointer, sizeof(type) * (oldCount), 0))
 
+static inline void mem_vec_init(struct MemVec *mem_vec) {
+    mem_vec->count =    0;
+    mem_vec->capacity = 0;
+}
+
 void* reallocate(void *pointer, size_t old_size, size_t new_size);
+
+// DEFINE_VECTOR(struct Column, columns)
+#define DEFINE_VECTOR(type, name_pascal, name_snake)                                            \
+struct name_pascal {                                                                            \
+    size_t  count;                                                                              \
+    size_t  capacity;                                                                           \
+    type    *data;                                                                              \
+};                                                                                              \
+                                                                                                \
+static void init_##name_snake(struct name_pascal *v) {                                          \
+    v->count    = 0;                                                                            \
+    v->capacity = 0;                                                                            \
+    v->data     = NULL;                                                                         \
+}                                                                                               \
+                                                                                                \
+static void free_##name_snake(struct name_pascal *v) {                                          \
+    free(v->data);                                                                              \
+    init_##name_snake(v);                                                                       \
+}                                                                                               \
+                                                                                                \
+static void push_##name_snake(struct name_pascal *v, type value) {                              \
+    if (v == NULL) {                                                                            \
+        fprintf(stderr, "push_" #name_snake ": Writing to NULL  " #name_snake " pointer.\n");   \
+        exit(1);                                                                                \
+    }                                                                                           \
+                                                                                                \
+    if (v->capacity < v->count + 1) {                                                           \
+       size_t old_capacity      = v->capacity;                                                  \
+       v->capacity              = grow_capacity(old_capacity);                                  \
+       v->data                  = GROW_ARRAY(type, v->data, old_capacity, v->capacity);         \
+    }                                                                                           \
+                                                                                                \
+    v->data[v->count] = value;                                                                  \
+    v->count++;                                                                                 \
+}
 
 #endif

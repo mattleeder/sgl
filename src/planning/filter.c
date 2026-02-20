@@ -118,12 +118,13 @@ static struct Value expr_to_value(struct Expr *expr, struct Row *row, struct Col
         case EXPR_COLUMN: {
             bool found = false;
             for (int i = 0; i < columns->count; i++) {
-                if (strncmp(expr->column.name, columns->names[i], columns->name_lengths[i]) != 0) {
+                struct Column column = columns->data[i];
+                if (expr->column.len != column.name_length || strncmp(expr->column.start, column.name_start, column.name_length) != 0) {
                     continue;
                 }
 
                 found = true;
-                uint32_t index = columns->indexes[i];
+                uint32_t index = column.index;
                 if (index >= row->column_count) {
                     fprintf(stderr, "expr_to_value: Index %d out of bounds %d.\n", index, row->column_count);
                     print_row_to_stderr(row);
@@ -134,7 +135,7 @@ static struct Value expr_to_value(struct Expr *expr, struct Row *row, struct Col
             }
 
             if (!found) {
-                fprintf(stderr, "expr_to_value: Could not find column %s.\n", expr->column.name);
+                fprintf(stderr, "expr_to_value: Could not find column %*s.\n", expr->column.len, expr->column.start);
                 exit(1);
             }
             break;
