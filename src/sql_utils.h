@@ -9,8 +9,6 @@
 #include "memory.h"
 #include "pager.h"
 
-#define CACHE_SIZE (16)
-
 struct IndexData {
     struct Columns  *columns;
     struct ExprList *predicates;
@@ -20,8 +18,26 @@ struct IndexData {
 struct Column {
     uint32_t    index;
     size_t      name_length;
-    char        *name_start;
+    const char  *name_start;
 };
+
+static inline hash_column(struct Column column) {
+    return hash_djb2_unterminated(column.name_start, column.name_length);
+}
+
+static inline equals_column(struct Column a, struct Column b) {
+    if (a.name_length != b.name_length) {
+        return false;
+    }
+
+    if (a.name_start == b.name_start) {
+        return true;
+    }
+
+    return strncmp(a.name_start, b.name_start, a.name_length) == 0;
+}
+
+DEFINE_HASH_MAP(struct Column, bool, Column, column, hash_column, equals_column)
 
 DEFINE_VECTOR(struct Column, Columns, columns)
 DEFINE_VECTOR(struct IndexData, IndexArray, index_array)

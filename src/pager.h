@@ -5,13 +5,14 @@
 #include <stdbool.h>
 #include <stdio.h>
 
-#define CACHE_CAPACITY (16)
+#define MIN_CACHE_CAPACITY (16)
 #define MAGIC_STRING_LENGTH (16)
 
 struct DatabaseHeader {
     uint8_t     reserved_space;
     uint32_t    page_size;
     uint32_t    page_count;
+    uint32_t    default_page_cache_size;
 };
 
 struct Page {

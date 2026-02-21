@@ -58,6 +58,12 @@ static void read_database_header(FILE *file, struct DatabaseHeader *database_hea
         exit(1); 
     }
     database_header->page_count = read_next_four_bytes_as_big_endian(file);
+
+    if (fseek(file, 48, SEEK_SET) != 0) {
+        fprintf(stderr, "read_database_header: fseek failed to seek to default page cache size\n");
+        exit(1);    
+    }
+    database_header->default_page_cache_size = read_next_four_bytes_as_big_endian(file);
 }
 
 struct Pager *pager_open(const char *database_file_path) {
@@ -74,6 +80,7 @@ struct Pager *pager_open(const char *database_file_path) {
     fprintf(stderr, "database_header.page_count: %d\n", database_header->page_count);
     fprintf(stderr, "database_header.page_size: %d\n", database_header->page_size);
     fprintf(stderr, "database_header.reserved_space: %d\n", database_header->reserved_space);
+    fprintf(stderr, "default_page_cache_size: %d\n", database_header->default_page_cache_size);
 
     struct PageHeader *schema_page_header = malloc(sizeof(struct PageHeader));
     struct Pager *pager = malloc(sizeof(struct Pager));
@@ -92,16 +99,16 @@ struct Pager *pager_open(const char *database_file_path) {
     pager->page_size            = database_header->page_size;
     pager->page_count           = database_header->page_count;
 
-    pager->cache_capacity       = CACHE_CAPACITY;
-    pager->pages                = calloc(CACHE_CAPACITY, sizeof(struct Page));
-    pager->data                 = calloc(CACHE_CAPACITY, pager->page_size);
+    pager->cache_capacity       = database_header->default_page_cache_size < MIN_CACHE_CAPACITY ? MIN_CACHE_CAPACITY : database_header->default_page_cache_size;
+    pager->pages                = calloc(pager->cache_capacity, sizeof(struct Page));
+    pager->data                 = calloc(pager->cache_capacity, pager->page_size);
     pager->clock                = 0;
 
     pager->database_header      = database_header;
     pager->schema_page_header   = schema_page_header;
 
     struct Page *page;
-    for (int i = 0; i < CACHE_CAPACITY; i++) {
+    for (int i = 0; i < pager->cache_capacity; i++) {
         page = &pager->pages[i];
         page->data = pager->data + pager->page_size * i;
     }
