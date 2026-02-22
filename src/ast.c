@@ -10,41 +10,51 @@ void print_expr_star_to_stderr(int padding) {
     fprintf(stderr, "%*sStar\n", padding, "");
 }
 
-void print_expr_column_to_stderr(struct Expr *expr, int padding) {
+void print_expr_column_to_stderr(struct ExprColumn *column, int padding) {
+    assert(column != NULL);
+
     fprintf(stderr, "%*sColumn\n", padding, "");
-    fprintf(stderr, "%*sName: %*s\n", padding + 4, "", expr->column.len, expr->column.start);
+    fprintf(stderr, "%*sName: %*s\n", padding + 4, "", column->len, column->start);
 }
 
-void print_expr_function_to_stderr(struct Expr *expr, int padding) {
+void print_expr_function_to_stderr(struct ExprFunction *function, int padding) {
+    assert(function != NULL);
+
     fprintf(stderr, "%*sFunction\n", padding, "");
-    fprintf(stderr, "%*sName: %s\n", padding + 4, "", expr->function.name);
-    print_expression_list_to_stderr(expr->function.args, padding + 4);
+    fprintf(stderr, "%*sName: %s\n", padding + 4, "", function->name);
+    print_expression_list_to_stderr(function->args, padding + 4);
 }
 
-void print_expr_binary_to_stderr(struct Expr *expr, int padding) {
+void print_expr_binary_to_stderr(struct ExprBinary *binary, int padding) {
+    assert(binary != NULL);
+
     fprintf(stderr, "%*sBinary\n", padding, "");
-    fprintf(stderr, "%*sOp: %d\n", padding + 4, "", expr->binary.op);
+    fprintf(stderr, "%*sOp: %d\n", padding + 4, "", binary->op);
     fprintf(stderr, "%*sLeft\n", padding + 4, "");
-    print_expression_to_stderr(expr->binary.left, padding + 8);
+    print_expression_to_stderr(binary->left, padding + 8);
     fprintf(stderr, "%*sRight\n", padding + 4, "");
-    print_expression_to_stderr(expr->binary.right, padding + 8);
+    print_expression_to_stderr(binary->right, padding + 8);
 }
 
-void print_expr_string_to_stderr(struct Expr *expr, int padding) {
+void print_expr_string_to_stderr(struct ExprString *string, int padding) {
+    assert(string != NULL);
+
     fprintf(stderr, "%*sString\n", padding, "");
-    fprintf(stderr, "%*s%.*s\n", padding + 4, "", (int)expr->string.len, expr->string.start);
+    fprintf(stderr, "%*s%.*s\n", padding + 4, "", (int)string->len, string->start);
 }
 
 void print_expression_to_stderr(struct Expr *expr, int padding) {
+    assert(expr != NULL);
+
     fprintf(stderr, "%*sExpression\n", padding, "");
 
     switch(expr->type) {
         case EXPR_COLUMN:
-            print_expr_column_to_stderr(expr, padding + 4);
+            print_expr_column_to_stderr(&expr->column, padding + 4);
             break;
 
         case EXPR_FUNCTION:
-            print_expr_function_to_stderr(expr, padding + 4);
+            print_expr_function_to_stderr(&expr->function, padding + 4);
             break;
 
         case EXPR_STAR:
@@ -52,11 +62,11 @@ void print_expression_to_stderr(struct Expr *expr, int padding) {
             break;
 
         case EXPR_BINARY:
-            print_expr_binary_to_stderr(expr, padding + 4);
+            print_expr_binary_to_stderr(&expr->binary, padding + 4);
             break;
 
         case EXPR_STRING:
-            print_expr_string_to_stderr(expr, padding + 4);
+            print_expr_string_to_stderr(&expr->string, padding + 4);
             break;
 
         default:
@@ -115,17 +125,27 @@ void print_select_statement_to_stderr(struct SelectStatement *stmt, int padding)
     fprintf(stderr, "\n\nPrinting Complete\n\n");
 }
 
-void get_column_from_expression(struct Expr *expr, struct Columns *columns) {
+void print_binary_expr_list_to_stderr(struct BinaryExprList *expr_list, int padding) {
+    assert(expr_list != NULL);
+    struct ExprBinary binary;
+    for (size_t i = 0; i < expr_list->count; i++) {
+        binary = expr_list->data[i];
+        print_expr_binary_to_stderr(&binary, padding + 4);
+    }
+}
+
+void get_column_from_expression(struct Expr *expr, struct ColumnToBoolHashMap *columns) {
     switch(expr->type) {
         case EXPR_INTEGER:
         case EXPR_STRING:
         case EXPR_FUNCTION:
             break;
 
-        case EXPR_COLUMN:
+        case EXPR_COLUMN: {
             struct Column column = { .index = 0, .name_start = expr->column.start, .name_length = expr->column.len };
-            push_columns(columns, column);
+            hash_map_column_to_bool_set(columns, column, true);
             break;
+        }
 
         case EXPR_BINARY:
             get_column_from_expression(expr->binary.left, columns);
@@ -142,9 +162,14 @@ void get_column_from_expression(struct Expr *expr, struct Columns *columns) {
     }
 }
 
-struct Columns *get_columns_from_expression_list(struct ExprList *expr_list) {
-    struct Columns *columns = malloc(sizeof(struct Columns));
-    init_columns(columns);
+struct ColumnToBoolHashMap *get_columns_from_expression_list(struct ExprList *expr_list) {
+    struct ColumnToBoolHashMap *columns = malloc(sizeof(struct ColumnToBoolHashMap));
+    if (!columns) {
+        fprintf(stderr, "get_columns_from_expression_list: failed to malloc *columns.\n");
+        exit(1);
+    }
+
+    hash_map_column_to_bool_init(columns, 8, 0.75);
 
     struct Expr *expr;
     for (int i = 0; i < expr_list->count; i++) {

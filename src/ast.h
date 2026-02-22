@@ -4,6 +4,7 @@
 #include <stdint.h>
 
 #include "memory.h"
+#include "sql_utils.h"
 
 enum AstNodeType {
     AST_SELECT,
@@ -109,14 +110,17 @@ struct CreateIndexStatement {
 };
 
 void print_expr_star_to_stderr(int padding);
-void print_expr_column_to_stderr(struct Expr *expr, int padding);
-void print_expr_function_to_stderr(struct Expr *expr, int padding);
-void print_expr_binary_to_stderr(struct Expr *expr, int padding);
+void print_expr_column_to_stderr(struct ExprColumn *column, int padding);
+void print_expr_function_to_stderr(struct ExprFunction *function, int padding);
+void print_expr_binary_to_stderr(struct ExprBinary *binary, int padding);
 void print_expression_to_stderr(struct Expr *expr, int padding);
 void print_expression_list_to_stderr(struct ExprList *expr_list, int padding);
 void print_select_statement_to_stderr(struct SelectStatement *stmt, int padding);
 
-struct Columns *get_columns_from_expression_list(struct ExprList *expr_list);
+void print_binary_expr_list_to_stderr(struct BinaryExprList *expr_list, int padding);
+
+void get_column_from_expression(struct Expr *expr, struct ColumnToBoolHashMap *columns);
+struct ColumnToBoolHashMap *get_columns_from_expression_list(struct ExprList *expr_list);
 struct IndexComparisonArray *get_index_comparisons(struct ExprList *expr_list);
 
 #endif

@@ -381,11 +381,13 @@ struct CreateIndexStatement *parse_create_index(struct Parser *parser, const cha
 
     consume(parser, &scanner, TOKEN_CREATE, "Expected 'CREATE'.");
     
+
     if (parser->current.type == TOKEN_UNIQUE) {
         advance(parser, &scanner);
     }
 
     consume(parser, &scanner, TOKEN_INDEX, "Expected 'INDEX'.");
+
 
     if (parser->current.type == TOKEN_IF) {
         advance(parser, &scanner);
@@ -403,6 +405,7 @@ struct CreateIndexStatement *parse_create_index(struct Parser *parser, const cha
         fprintf(stderr, "Expected schema-name or index-name.");
         exit(1);
     }
+
 
     // Could be schema name, read as index name for now
     stmt->index_name        = parser->current.start;

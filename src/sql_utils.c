@@ -113,14 +113,14 @@ uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_
     return (uint32_t)0;
 }
 
-struct IndexArray *get_all_indexes_for_table(struct Pager *pager, char* table_name) {
-    struct IndexArray *index_array = malloc(sizeof(struct IndexArray));
+struct IndexColumnsArray *get_all_indexes_for_table(struct Pager *pager, char* table_name) {
+    struct IndexColumnsArray *index_array = malloc(sizeof(struct IndexColumnsArray));
     if (!index_array) {
         fprintf(stderr, "get_all_indexes_for_table: failed to malloc *index_array.\n");
         exit(1);
     }
 
-    init_index_array(index_array);
+    init_index_columns_array(index_array);
 
     struct PageHeader page_header;
     uint16_t *cell_offsets = read_page_header_and_cell_pointer_array(pager, &page_header, 1);
@@ -130,9 +130,9 @@ struct IndexArray *get_all_indexes_for_table(struct Pager *pager, char* table_na
 
     struct Cell cell;
     struct SchemaRecord record;
-    struct Parser parser_create_index;
-
+    
     for (int i = 0; i < page_header.number_of_cells; i++) {
+        struct Parser parser_create_index;
         uint16_t offset = cell_offsets[i];
         read_cell_and_schema_record(pager, &page_header, &cell, offset, &record);
 
@@ -144,12 +144,14 @@ struct IndexArray *get_all_indexes_for_table(struct Pager *pager, char* table_na
             continue;
         }
 
-        struct CreateIndexStatement *stmt = parse_create_index(&parse_create_index, record.body.sql, pool);
+        struct CreateIndexStatement *stmt = parse_create_index(&parser_create_index, record.body.sql, pool);
 
-        struct IndexData index_data = { .root_page = record.body.root_page, .columns = stmt->indexed_columns };
+        struct IndexColumns index_column = { .root_page = record.body.root_page, .columns = stmt->indexed_columns };
 
-        push_index_array(index_array, index_data);
+        push_index_columns_array(index_array, index_column);
     }
 
+    free(cell_offsets);
+    free(pool);
     return index_array;
 }

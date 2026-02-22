@@ -1,6 +1,7 @@
 #ifndef sql_comparisons
 #define sql_comparisons
 
+#include "memory.h"
 #include "data_parsing/row_parsing.h"
 
 struct Value get_predicate_value(struct ExprBinary *predicate);

@@ -12,6 +12,8 @@
 #include "../comparisons.h"
 #include "plan.h"
 
+#define COLUMNS_IN_EXPR_HASH_MAP_MIN_SIZE 8
+
 struct TableScan {
     struct Plan         base;
     size_t              row_cursor;
@@ -23,13 +25,107 @@ struct TableScan {
     struct Index        *index;
 };
 
-static struct IndexData *new_get_best_index(struct Pager *pager, struct SelectStatement *stmt) {
+static struct ColumnToBoolHashMap *get_hash_map_from_columns_array(struct Columns *columns) {
+    struct ColumnToBoolHashMap *hash_map = malloc(sizeof(struct ColumnToBoolHashMap));
+    if (!hash_map) {
+        fprintf(stderr, "get_hash_map_from_columns_array: failed to malloc *hash_map.\n");
+        exit(1);
+    }
+
+    fprintf(stderr, "Col count %zu\n", columns->count);
+    hash_map_column_to_bool_init(hash_map, columns->count, 0.75);
+    fprintf(stderr, "get_hash_map_from_columns_array: hash_map_column_to_bool_init successful\n");
+
+    struct Column column;
+    for (int i = 0; i < columns->count; i++) {
+        column = columns->data[i];
+        fprintf(stderr, "%.*s\n", column.name_length, column.name_start);
+        hash_map_column_to_bool_set(hash_map, column, true);
+    }
+
+    return hash_map;
+}
+
+static struct BinaryExprList *collect_index_predicates(struct IndexData *index_data, struct SelectStatement *stmt) {
     if (stmt->where_list == NULL) {
+        fprintf(stderr, "where_list == NULL\n");
         return NULL;
     }
 
-    struct IndexComparisonArray *comparison_array = get_columns_from_expression_list(stmt->where_list);
-    struct IndexArray *index_array = get_all_indexes_for_table(pager, stmt->from_table);
+    struct BinaryExprList *expr_list = malloc(sizeof(struct BinaryExprList));
+
+    if (!expr_list) {
+        fprintf(stderr, "collect_index_predicates: failed to malloc *expr_list.\n");
+        exit(1);
+    }
+
+    init_binary_expr_list(expr_list);
+
+    struct ColumnToBoolHashMap *hash_map = get_hash_map_from_columns_array(index_data->columns);
+
+    struct Expr *expr;
+    for (int i = 0; i < stmt->where_list->count; i++) {
+        expr = &stmt->where_list->data[i];
+        
+        if (expr->type != EXPR_BINARY) {
+            continue;
+        }
+
+        struct ColumnToBoolHashMap *columns_hash_map = malloc(sizeof(struct ColumnToBoolHashMap));
+        if (!columns_hash_map) {
+            fprintf(stderr, "collect_index_predicates: failed to malloc *columns_hash_map.\n");
+            exit(1);
+        }
+        
+        
+        hash_map_column_to_bool_init(columns_hash_map, COLUMNS_IN_EXPR_HASH_MAP_MIN_SIZE, 0.75);
+        get_column_from_expression(expr, columns_hash_map);
+
+        size_t columns_element_count;
+        struct Column *columns = hash_map_column_to_bool_keys_to_array(columns_hash_map, &columns_element_count);
+        struct Column column;
+
+        bool index_contains_all_columns = true;
+        for (int j = 0; j < columns_element_count; j++) {
+            column = columns[j];
+
+            if (!hash_map_column_to_bool_contains(hash_map, column)) {
+                index_contains_all_columns = false;
+                break;
+            }
+
+        }
+
+        if (index_contains_all_columns) {
+            fprintf(stderr, "Pushing\n");
+            push_binary_expr_list(expr_list, expr->binary);
+            fprintf(stderr, "Count is now %zu\n", expr_list->count);
+        }
+
+
+        free(columns);
+        hash_map_column_to_bool_free(columns_hash_map);
+        free(columns_hash_map);
+    }
+
+    hash_map_column_to_bool_free(hash_map);
+    free(hash_map);
+
+    return expr_list;
+}
+
+static struct IndexData *new_get_best_index(struct Pager *pager, struct SelectStatement *stmt) {
+    fprintf(stderr, "new_get_best_index: called.\n");
+
+    if (stmt->where_list == NULL) {
+        fprintf(stderr, "where_list == NULL\n");
+        return NULL;
+    }
+
+    struct ColumnToBoolHashMap *column_hash_map = get_columns_from_expression_list(stmt->where_list);
+    struct IndexColumnsArray *index_array = get_all_indexes_for_table(pager, stmt->from_table);
+
+    fprintf(stderr, "Found %d indexes\n", index_array->count);
 
     // Pick the index with the most matching columns
     struct IndexData *best_index = malloc(sizeof(struct IndexData));
@@ -42,86 +138,63 @@ static struct IndexData *new_get_best_index(struct Pager *pager, struct SelectSt
     best_index->predicates  = NULL;
     best_index->root_page   = 0;
 
-
-
-    struct IndexData index_data;
+    struct IndexColumns index_data;
     struct Column index_column;
-    struct IndexComparison comparison;
-    struct Column comparison_column;
     int matching_columns_max = 0;
     int matching_columns_cur = 0;
-    bool index_matches_all_columns;
 
     // @TODO: should be using hash map/set
-    // For each index, compare it to all binary predicates containing columns
-    // If it contains all the columns in a predicate, then increment it
-    // by that many columns
-    // If the index has the most column matches it is the best index
+    // For each index, compare it in order to hash map of all binary predicate columns
+    // Increment matching_columns_cur for every column it contains 
+    // If the index has the most column matches it is the best index so far
+    // Set matching_columns_max = matching_columns_cur
+    fprintf(stderr, "Searching\n");
     for (int i = 0; i < index_array->count; i++) {
+        fprintf(stderr, "i: %d\n", i);
         matching_columns_cur = 0;
         index_data = index_array->data[i];
 
-        struct BinaryExprList *current_predicates = malloc(sizeof(struct BinaryExprList));
-        if (!current_predicates) {
-            fprintf(stderr, "new_get_best_index: failed to malloc *predicates.\n");
-            exit(1);
-        }
-        init_binary_expr_list(current_predicates);
+        for (int j = 0; j < index_data.columns->count; j++) {
+            index_column = index_data.columns->data[j];
 
-        for (int j = 0; j < comparison_array->count; j++) {
-            index_matches_all_columns = true;
-            comparison = comparison_array->data[j];
-            
-            for (int k = 0; k < comparison.columns->count; k++) {
-                comparison_column = comparison.columns->data[k];
-                
-                if (comparison_column.name_length != index_column.name_length) {
-                    index_matches_all_columns = false;
-                    break;
-                }
-                
-                if (strncmp(comparison_column.name_start, index_column.name_start, index_column.name_length) != 0) {
-                    index_matches_all_columns = false;
-                    break;
-                }
-                
+            if (!hash_map_column_to_bool_contains(column_hash_map, index_column)) {
+                break;
             }
 
-            if (!index_matches_all_columns) {
-                continue;
-            }
-
-            matching_columns_cur += comparison.columns->count;
-            push_binary_expr_list(current_predicates, comparison.binary);
-
+            matching_columns_cur++;
         }
 
         if (matching_columns_cur > matching_columns_max) {
-            if (best_index->predicates != NULL) {
-                free_binary_expr_list(best_index->predicates);
-            }
-
-            matching_columns_max = matching_columns_cur;
+            // Index data doesnt have predicates
             best_index->columns     = index_data.columns;
-            best_index->predicates  = current_predicates;
             best_index->root_page   = index_data.root_page;
-        } else {
-            free_binary_expr_list(current_predicates);
+            matching_columns_max    = matching_columns_cur;
         }
-
     }
 
-    if (matching_columns_max > 0) {
-        fprintf(stderr, "Best index: \n");
-        for (int i = 0; i < best_index->columns->count; i++) {
-            struct Column col = best_index->columns->data[i];
-            fprintf(stderr, "    %d: %.*s\n", i, col.name_length, col.name_start);
-        }
-        return best_index;
+    hash_map_column_to_bool_free(column_hash_map);
+    free_index_columns_array(index_array);
+
+    if (best_index->root_page == 0) {   
+        fprintf(stderr, "Could not find suitable index.\n");
+        free(best_index);
+        return NULL;
     }
 
-    free(best_index);
-    return NULL;
+    fprintf(stderr, "Best index columns: \n");
+    for (int i = 0; i < best_index->columns->count; i++) {
+        index_column = best_index->columns->data[i];
+        fprintf(stderr, "Col %d: %.*s\n", i, index_column.name_length, index_column.name_start);
+    }
+
+    // Fetch predicates using index columns
+    best_index->predicates = collect_index_predicates(best_index, stmt);
+    fprintf(stderr, "Best index predicates: \n");
+    fprintf(stderr, "Count: %zu\n", best_index->predicates->count);
+    print_binary_expr_list_to_stderr(best_index->predicates, 4);
+
+    fprintf(stderr, "Returning best index\n");
+    return best_index;
     
 
     // @TODO:
@@ -235,6 +308,7 @@ static struct Plan *make_table_scan(struct Pager *pager, struct SelectStatement 
     // Find any indexes for our table
     // Check if any predicate matches that index
     struct Index *index = get_best_index(pager, stmt);
+    new_get_best_index(pager, stmt);
 
     memset(table_scan, 0, sizeof *table_scan);
     table_scan->base.type       = PLAN_TABLE_SCAN;
@@ -251,7 +325,7 @@ static struct Plan *make_table_scan(struct Pager *pager, struct SelectStatement 
 
     // @TODO: this is not the appropriate check, needs to be ID INTEGER or something
     struct Column column = table_scan->columns->data[0];
-    table_scan->first_col_is_row_id = strncmp("id", column.name_start, column.name_length) == 0;
+    table_scan->first_col_is_row_id = strncmp("id", column.name_start, 2) == 0;
 
     table_scan->walker = new_tree_walker(pager, table_scan->root_page, table_scan->first_col_is_row_id, table_scan->index);
 

@@ -6,6 +6,7 @@
 #include <stdio.h>
 #include <limits.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #define MIN_CAPACITY 8
 
@@ -35,7 +36,6 @@ static inline void mem_vec_init(struct MemVec *mem_vec) {
 
 void* reallocate(void *pointer, size_t old_size, size_t new_size);
 
-// DEFINE_VECTOR(struct Column, columns)
 #define DEFINE_VECTOR(type, name_pascal, name_snake)                                            \
 struct name_pascal {                                                                            \
     size_t  count;                                                                              \
@@ -87,7 +87,7 @@ static inline size_t hash_djb2(const char *string) {
 
 static inline size_t hash_djb2_unterminated(const char *string, size_t len) {
     size_t hash = 5381;
-    for (int i = 0; i < len; string++)
+    for (int i = 0; i < len; i++)
         hash = ((hash << 5) + hash) + (unsigned char)string[i];
     return hash;
 }
@@ -106,7 +106,7 @@ static inline size_t equals_string(const char *a, const char *b) {
 struct name_pascal##HashMapNode {                                                                                               \
     struct name_pascal##HashMapNode     *next;                                                                                  \
     key_type                            key;                                                                                    \
-    value_type                          *value;                                                                                 \
+    value_type                          value;                                                                                  \
 };                                                                                                                              \
                                                                                                                                 \
 DEFINE_VECTOR(struct name_pascal##HashMapNode*, name_pascal##HashMapBuckets, name_snake##_hash_map_buckets)                     \
@@ -115,17 +115,20 @@ struct name_pascal##HashMap {                                                   
     struct name_pascal##HashMapBuckets  buckets;                                                                                \
     float                               load_factor;                                                                            \
     size_t                              buckets_used;                                                                           \
+    size_t                              element_count;                                                                          \
 };                                                                                                                              \
                                                                                                                                 \
 static void hash_map_##name_snake##_init(struct name_pascal##HashMap *hash_map, size_t initial_capacity, float load_factor) {   \
+    assert(hash_map);                                                                                                           \
     init_##name_snake##_hash_map_buckets(&hash_map->buckets);                                                                   \
     if (initial_capacity == 0) {                                                                                                \
-        initial_capacity = 1;                                                                                                   \
+        initial_capacity = grow_capacity(0);                                                                                    \
         fprintf(stderr, "hash_map_" #name_snake "_init: cannot have 0 initial capacity, setting to 1.\n");                      \
     }                                                                                                                           \
                                                                                                                                 \
-    hash_map->load_factor  = load_factor;                                                                                       \
-    hash_map->buckets_used = 0;                                                                                                 \
+    hash_map->load_factor   = load_factor;                                                                                      \
+    hash_map->buckets_used  = 0;                                                                                                \
+    hash_map->element_count = 0;                                                                                                \
                                                                                                                                 \
     for (int i = 0; i < initial_capacity; i++) {                                                                                \
         push_##name_snake##_hash_map_buckets(&hash_map->buckets, NULL);                                                         \
@@ -133,8 +136,10 @@ static void hash_map_##name_snake##_init(struct name_pascal##HashMap *hash_map, 
 }                                                                                                                               \
                                                                                                                                 \
 static bool grow_##name_snake_##hash_map(struct name_pascal##HashMap *hash_map) {                                               \
+    assert(hash_map);                                                                                                           \
+                                                                                                                                \
     size_t old_capacity                         = hash_map->buckets.capacity;                                                   \
-    size_t new_capacity                         = grow(old_capacity);                                                           \
+    size_t new_capacity                         = grow_capacity(old_capacity);                                                  \
     struct name_pascal##HashMapNode **old_data  = hash_map->buckets.data;                                                       \
     struct name_pascal##HashMapNode **new_data  = calloc(new_capacity, sizeof(*new_data));                                      \
                                                                                                                                 \
@@ -147,6 +152,8 @@ static bool grow_##name_snake_##hash_map(struct name_pascal##HashMap *hash_map) 
     hash_map->buckets.capacity  = new_capacity;                                                                                 \
     hash_map->buckets.count     = hash_map->buckets.capacity;                                                                   \
     hash_map->buckets_used      = 0;                                                                                            \
+                                                                                                                                \
+    assert(hash_map->buckets.capacity > 0);                                                                                     \
                                                                                                                                 \
     for (int i = 0; i < old_capacity; i++) {                                                                                    \
         struct name_pascal##HashMapNode *curr = old_data[i];                                                                    \
@@ -167,7 +174,10 @@ static bool grow_##name_snake_##hash_map(struct name_pascal##HashMap *hash_map) 
     return true;                                                                                                                \
 }                                                                                                                               \
                                                                                                                                 \
-static bool hash_map_##name_snake##_set(struct name_pascal##HashMap *hash_map, key_type key, value_type *value) {               \
+static bool hash_map_##name_snake##_set(struct name_pascal##HashMap *hash_map, key_type key, value_type value) {                \
+    assert(hash_map);                                                                                                           \
+    assert(hash_map->buckets.capacity > 0);                                                                                     \
+    assert(hash_map->buckets.data);                                                                                             \
     size_t bucket_number = hash_function(key) % hash_map->buckets.capacity;                                                     \
                                                                                                                                 \
     struct name_pascal##HashMapNode *old_head = hash_map->buckets.data[bucket_number];                                          \
@@ -187,6 +197,8 @@ static bool hash_map_##name_snake##_set(struct name_pascal##HashMap *hash_map, k
         exit(1);                                                                                                                \
     }                                                                                                                           \
                                                                                                                                 \
+    hash_map->element_count++;                                                                                                  \
+                                                                                                                                \
     new_node->key       = key;                                                                                                  \
     new_node->next      = old_head;                                                                                             \
     new_node->value     = value;                                                                                                \
@@ -195,6 +207,7 @@ static bool hash_map_##name_snake##_set(struct name_pascal##HashMap *hash_map, k
                                                                                                                                 \
     if (old_head == NULL) hash_map->buckets_used++;                                                                             \
                                                                                                                                 \
+    assert((float)hash_map->buckets.capacity > 0);                                                                              \
     if (((float)hash_map->buckets_used / (float)hash_map->buckets.capacity) >= hash_map->load_factor)  {                        \
         grow_##name_snake_##hash_map(hash_map);                                                                                 \
     }                                                                                                                           \
@@ -202,19 +215,45 @@ static bool hash_map_##name_snake##_set(struct name_pascal##HashMap *hash_map, k
     return true;                                                                                                                \
 }                                                                                                                               \
                                                                                                                                 \
-static value_type *hash_map_##name_snake##_get(struct name_pascal##HashMap *hash_map, key_type key) {                           \
+static bool hash_map_##name_snake##_get(struct name_pascal##HashMap *hash_map, key_type key, value_type *out) {                 \
+    assert(hash_map->buckets.capacity > 0);                                                                                     \
     size_t bucket_number = hash_function(key) % hash_map->buckets.capacity;                                                     \
                                                                                                                                 \
     struct name_pascal##HashMapNode *curr_node = hash_map->buckets.data[bucket_number];                                         \
                                                                                                                                 \
     while (curr_node != NULL) {                                                                                                 \
-        if (equals_function(curr_node->key, key)) {                                                                                  \
+        if (equals_function(curr_node->key, key)) {                                                                             \
             break;                                                                                                              \
         }                                                                                                                       \
         curr_node = curr_node->next;                                                                                            \
     }                                                                                                                           \
                                                                                                                                 \
-    return curr_node ? curr_node->value : NULL;                                                                                 \
+    if (curr_node == NULL) {                                                                                                    \
+        return false;                                                                                                           \
+    }                                                                                                                           \
+                                                                                                                                \
+    *out = curr_node->value;                                                                                                    \
+    return true;                                                                                                                \
+}                                                                                                                               \
+                                                                                                                                \
+static bool hash_map_##name_snake##_contains(struct name_pascal##HashMap *hash_map, key_type key) {                             \
+    assert(hash_map->buckets.capacity > 0);                                                                                     \
+    size_t bucket_number = hash_function(key) % hash_map->buckets.capacity;                                                     \
+                                                                                                                                \
+    struct name_pascal##HashMapNode *curr_node = hash_map->buckets.data[bucket_number];                                         \
+                                                                                                                                \
+    while (curr_node != NULL) {                                                                                                 \
+        if (equals_function(curr_node->key, key)) {                                                                             \
+            break;                                                                                                              \
+        }                                                                                                                       \
+        curr_node = curr_node->next;                                                                                            \
+    }                                                                                                                           \
+                                                                                                                                \
+    if (curr_node == NULL) {                                                                                                    \
+        return false;                                                                                                           \
+    }                                                                                                                           \
+                                                                                                                                \
+    return true;                                                                                                                \
 }                                                                                                                               \
                                                                                                                                 \
 static void hash_map_##name_snake##_free(struct name_pascal##HashMap *hash_map) {                                               \
@@ -229,11 +268,38 @@ static void hash_map_##name_snake##_free(struct name_pascal##HashMap *hash_map) 
         }                                                                                                                       \
     }                                                                                                                           \
                                                                                                                                 \
+    free(hash_map->buckets.data);                                                                                               \
     hash_map->buckets.data      = NULL;                                                                                         \
     hash_map->buckets.capacity  = 0;                                                                                            \
     hash_map->buckets.count     = 0;                                                                                            \
     hash_map->buckets_used      = 0;                                                                                            \
     hash_map->load_factor       = 0.0f;                                                                                         \
+}                                                                                                                               \
+                                                                                                                                \
+static key_type *hash_map_##name_snake##_keys_to_array(struct name_pascal##HashMap *hash_map, size_t *out_count) {              \
+    assert(hash_map);                                                                                                           \
+    assert(hash_map->buckets.data);                                                                                             \
+    assert(out_count);                                                                                                          \
+    key_type *array = malloc(hash_map->element_count * sizeof(key_type));                                                       \
+    if (!array) {                                                                                                               \
+        fprintf(stderr, "hash_map" #name_snake "_to_array: failed to malloc *array.\n");                                        \
+        exit(1);                                                                                                                \
+    }                                                                                                                           \
+                                                                                                                                \
+    size_t idx = 0;                                                                                                             \
+    struct name_pascal##HashMapNode *curr;                                                                                      \
+    for (size_t i = 0; i < hash_map->buckets.capacity; i++) {                                                                      \
+        curr = hash_map->buckets.data[i];                                                                                       \
+        while (curr != NULL) {                                                                                                  \
+            array[idx] = curr->key;                                                                                             \
+            idx++;                                                                                                              \
+            curr = curr->next;                                                                                                  \
+        }                                                                                                                       \
+    }                                                                                                                           \
+                                                                                                                                \
+    *out_count = hash_map->element_count;                                                                                       \
+                                                                                                                                \
+    return array;                                                                                                               \
 }
 
 #endif
