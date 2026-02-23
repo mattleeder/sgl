@@ -100,6 +100,241 @@ static inline size_t equals_string(const char *a, const char *b) {
     return strcmp(a, b) == 0;
 }
 
+struct HashMapNode {
+    struct HashMapNode  *next;
+    void                *key;
+    void                *value;
+};
+
+struct HashMap {
+    struct HashMapNode  **data;
+
+    size_t  (*hash_function)(const void *key);
+    bool    (*equality_function)(const void *a, const void *b);
+
+    float               load_factor;
+    size_t              buckets_used;
+    size_t              buckets_capacity;
+    size_t              element_count;
+};
+
+static void hash_map_init(struct HashMap *hash_map,
+    size_t initial_capacity, 
+    float load_factor,
+    size_t (*hash_function)(const void *key), 
+    bool (*equality_function)(const void *a, const void *b) ) {
+    struct HashMapNode **buckets = calloc(initial_capacity, sizeof(*buckets));
+    if (!buckets) {
+        fprintf(stderr, "hash_map_init: **buckets malloc failed.\n");
+        exit(1);
+    }
+
+    hash_map->data              = buckets;
+
+    hash_map->hash_function     = hash_function;
+    hash_map->equality_function = equality_function;
+
+    hash_map->load_factor       = load_factor;
+    hash_map->buckets_used      = 0;
+    hash_map->buckets_capacity  = initial_capacity;
+    hash_map->element_count     = 0;
+}
+
+static bool hash_map_grow(struct HashMap *hash_map) {
+    assert(hash_map);
+
+    size_t old_capacity = hash_map->buckets_capacity;
+    size_t new_capacity = grow_capacity(old_capacity);
+    struct HashMapNode **old_data = hash_map->data;
+    struct HashMapNode **new_data = calloc(new_capacity, sizeof(*new_data));
+
+    if (!new_data) {
+        fprintf(stderr, "hash_map_grow: **new_data malloc failed.\n");
+        exit(1);
+    }
+
+    hash_map->data              = new_data;
+    hash_map->buckets_used      = 0;
+    hash_map->buckets_capacity  = new_capacity;
+
+    assert(hash_map->buckets_capacity > 0);
+
+    // hash_map->element_count doesnt change during grow
+    for (int i = 0; i < old_capacity; i++) {
+        struct HashMapNode *curr = old_data[i];
+        struct HashMapNode *next;
+        while (curr) {
+            next = curr->next;
+
+            size_t bucket_number = hash_map->hash_function(curr->key) % hash_map->buckets_capacity;
+            if (!new_data[bucket_number]) hash_map->buckets_used++;
+            curr->next = new_data[bucket_number];
+            new_data[bucket_number] = curr;
+
+            curr = next;
+        }
+    }
+
+    free(old_data);
+    return true;
+}
+
+static bool hash_map_set(struct HashMap *hash_map, const void *key, const void *value) {
+    assert(hash_map);
+    assert(hash_map->buckets_capacity > 0);
+    assert(hash_map->data);
+
+    size_t bucket_number = hash_map->hash_function(key) % hash_map->buckets_capacity;
+
+    struct HashMapNode *old_head = hash_map->data[bucket_number];
+    struct HashMapNode *curr = old_head;
+
+    while (curr) {
+        if (hash_map->equality_function(curr->key, key)) {
+            curr->value = value;
+            return true;
+        }
+        curr = curr->next;
+    }
+
+    struct HashMapNode *new_node = malloc(sizeof(*new_node));
+    if (!new_node) {
+        fprintf(stderr, "hash_map_set: failed to malloc *new_node.\n");
+        exit(1);
+    }
+
+    hash_map->element_count++;
+
+    new_node->key   = key;
+    new_node->next  = old_head;
+    new_node->value = value;
+
+    hash_map->data[bucket_number] = new_node;
+
+    if (!old_head) hash_map->buckets_used++;
+
+    assert((float)hash_map->buckets_capacity > 0);
+    if (((float)hash_map->buckets_used / (float)hash_map->buckets_capacity) >= hash_map->load_factor) {
+        hash_map_grow(hash_map);
+    }
+
+    return true;
+}
+
+static void *hash_map_get(struct HashMap *hash_map, const void *key) {
+    assert(hash_map);
+    assert(hash_map->buckets_capacity > 0);
+    assert(hash_map->data);
+    
+    size_t bucket_number = hash_map->hash_function(key) % hash_map->buckets_capacity;
+
+    struct HashMapNode *curr_node = hash_map->data[bucket_number];
+
+    while (curr_node) {
+        if (hash_map->equality_function(curr_node->key, key)) {
+            break;
+        }
+        curr_node = curr_node->next;
+    }
+
+    if (!curr_node) {
+        return NULL;
+    }
+
+    return curr_node->value;
+}
+
+static bool hash_map_contains(struct HashMap *hash_map, const void *key) {
+    assert(hash_map);
+    assert(hash_map->buckets_capacity > 0);
+    assert(hash_map->data);
+    size_t bucket_number = hash_map->hash_function(key) % hash_map->buckets_capacity;
+
+    struct HashMapNode *curr_node = hash_map->data[bucket_number];
+
+    while (curr_node) {
+        if (hash_map->equality_function(curr_node->key, key)) {
+            break;
+        }
+        curr_node = curr_node->next;
+    }
+
+    if (!curr_node) {
+        return false;
+    }
+
+    return true;
+}
+
+static void hash_map_free(struct HashMap *hash_map) {
+    for (size_t i = 0; i < hash_map->buckets_capacity; i++) {
+        struct HashMapNode *curr = hash_map->data[i];
+        struct HashMapNode *next;
+
+        while (curr) {
+            next = curr->next;
+            free(curr);
+            curr = next;
+        }
+    }
+
+    free(hash_map->data);
+    hash_map->data = NULL;
+
+    hash_map->hash_function     = NULL;
+    hash_map->equality_function = NULL;
+
+    hash_map->load_factor         = 0;
+    hash_map->buckets_used        = 0;
+    hash_map->buckets_capacity    = 0;
+    hash_map->element_count       = 0;
+}
+
+static void **hash_map_get_keys_alloc(struct HashMap *hash_map, size_t *out_count) {
+    assert(hash_map);
+    assert(hash_map->data);
+    assert(out_count);
+
+    void **array = malloc(hash_map->element_count * sizeof(*array));
+    if (!array) {
+        fprintf(stderr, "hash_map_get_keys: failed to malloc **array.\n");
+        exit(1);
+    }
+
+    size_t idx = 0;
+    struct HashMapNode *curr;
+    for (size_t i = 0; i < hash_map->buckets_capacity; i++) {
+        curr = hash_map->data[i];
+        while (curr) {
+            array[idx] = curr->key;
+            idx++;
+            curr = curr->next;
+        }
+    }
+
+    *out_count = hash_map->element_count;
+
+    return array;
+}
+
+#define DEFINE_TYPED_HASH_MAP(key_type, value_type, name_pascal, name_snake)                                    \
+                                                                                                                \
+static bool hash_map_##name_snake##_set(struct HashMap *hash_map, key_type *key, value_type *value) {           \
+    return hash_map_set(hash_map, key, value);                                                                  \
+}                                                                                                               \
+                                                                                                                \
+static value_type *hash_map_##name_snake##_get(struct HashMap *hash_map, const key_type *key) {                 \
+    return hash_map_get(hash_map, key);                                                                         \
+}                                                                                                               \
+                                                                                                                \
+static bool hash_map_##name_snake##_contains(struct HashMap *hash_map, const key_type *key) {                   \
+    return hash_map_contains(hash_map, key);                                                                    \
+}                                                                                                               \
+                                                                                                                \
+static key_type **hash_map_##name_snake##_get_keys_alloc(struct HashMap *hash_map, size_t *out_count) {         \
+    return hash_map_get_keys_alloc(hash_map, out_count);                                                        \
+}
+
 
 #define DEFINE_HASH_MAP(key_type, value_type, name_pascal, name_snake, hash_function, equals_function)                          \
                                                                                                                                 \
@@ -288,7 +523,7 @@ static key_type *hash_map_##name_snake##_keys_to_array(struct name_pascal##HashM
                                                                                                                                 \
     size_t idx = 0;                                                                                                             \
     struct name_pascal##HashMapNode *curr;                                                                                      \
-    for (size_t i = 0; i < hash_map->buckets.capacity; i++) {                                                                      \
+    for (size_t i = 0; i < hash_map->buckets.capacity; i++) {                                                                   \
         curr = hash_map->buckets.data[i];                                                                                       \
         while (curr != NULL) {                                                                                                  \
             array[idx] = curr->key;                                                                                             \

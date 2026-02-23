@@ -297,11 +297,7 @@ static struct Plan *make_table_scan(struct Pager *pager, struct SelectStatement 
     
     struct PageHeader page_header;
     read_page_header(pager, &page_header, schema_record->body.root_page);
-
-    struct Parser parser_create;
-    // Empty pool, dont care about reserved words here
-    struct TriePool *reserved_words_pool = init_reserved_words();
-    struct Columns *columns = parse_create(&parser_create, schema_record->body.sql, reserved_words_pool);
+    
 
     // Find any indexes for our table
     // Check if any predicate matches that index
@@ -313,19 +309,13 @@ static struct Plan *make_table_scan(struct Pager *pager, struct SelectStatement 
     table_scan->row_cursor      = 0;
     table_scan->root_page       = schema_record->body.root_page;
     table_scan->table_name      = stmt->from_table;
-    table_scan->columns         = columns;
     table_scan->index           = index;
-
-    for (int i = 0; i < table_scan->columns->count; i++) {
-        struct Column column = table_scan->columns->data[i];
-        fprintf(stderr, "make_table_scan: Column %d %.*s\n", i, (int)column.name.len, column.name.start);
-    }
 
     // @TODO: this is not the appropriate check, needs to be ID INTEGER or something
     struct Column column = table_scan->columns->data[0];
     table_scan->first_col_is_row_id = strncmp("id", column.name.start, 2) == 0;
 
-    table_scan->walker = new_tree_walker(pager, table_scan->root_page, table_scan->first_col_is_row_id, table_scan->index);
+    table_scan->walker = new_tree_walker(pager, table_scan->root_page, table_scan->index);
 
     // fprintf(stderr, "There are %d rows\n", table_scan->table_scan.num_rows);
     fprintf(stderr, "make_table_scan: return\n");

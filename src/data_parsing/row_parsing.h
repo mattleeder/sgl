@@ -5,6 +5,7 @@
 
 #include "../pager.h"
 #include "page_parsing.h"
+#include "cell_parsing.h"
 #include "record_parsing.h"
 
 enum ValueType {
@@ -43,23 +44,20 @@ struct Value {
 };
 
 struct Row {
+    uint64_t        rowid;
     uint64_t        column_count;
     struct Value    *values;
 };
 
 void free_row(struct Row *row);
 
-void read_row_from_record(
-    struct Record *record,
-    struct Row *row, 
-    int64_t rowid);
+void read_row_from_record(struct Record *record, struct Row *row, struct Cell *cell);
 
 void read_cell_offset_into_row(
     struct Pager *pager, 
     struct Row *row, 
     struct PageHeader *page_header, 
-    uint16_t cell_offset, 
-    bool first_col_is_rowid);
+    uint16_t cell_offset);
     
 void print_value(struct Value *value);
 void print_value_to_stderr(struct Value *value);

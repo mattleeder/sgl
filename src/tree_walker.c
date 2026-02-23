@@ -94,7 +94,7 @@ void remove_last_walker(struct SubWalkerList *sub_walker_list) {
 }
 
 // Step 1.
-struct SubWalker *new_sub_walker(struct Pager *pager, uint32_t page, bool first_col_is_rowid, struct Index *index) {
+struct SubWalker *new_sub_walker(struct Pager *pager, uint32_t page, struct Index *index) {
     struct SubWalker *walker = malloc(sizeof(struct SubWalker));
     
     if (!walker) {
@@ -108,7 +108,6 @@ struct SubWalker *new_sub_walker(struct Pager *pager, uint32_t page, bool first_
     walker->cell_pointer_array   = NULL;
     walker->current_index        = 0;
     walker->cell                 = malloc(sizeof(struct Cell));
-    walker->first_col_is_rowid   = first_col_is_rowid;
     walker->step                 = NULL;
     walker->index                = index;
 
@@ -213,13 +212,13 @@ void interior_table_step(struct SubWalker *walker, struct SubWalkerList *list, s
         // A left child
         next_child = walker->cell_pointer_array[result];
         read_cell(walker->pager, walker->page_header, walker->cell, next_child);
-        new_walker = new_sub_walker(walker->pager, walker->cell->data.table_interior_cell.left_child_pointer, walker->first_col_is_rowid, walker->index);
+        new_walker = new_sub_walker(walker->pager, walker->cell->data.table_interior_cell.left_child_pointer, walker->index);
         // fprintf(stderr, "Begin walk from left child\n");
 
     } else {
         // Right most child
         next_child = walker->page_header->right_most_pointer;
-        new_walker = new_sub_walker(walker->pager, next_child, walker->first_col_is_rowid, walker->index);
+        new_walker = new_sub_walker(walker->pager, next_child, walker->index);
         remove_last_walker(list);
         // fprintf(stderr, "Begin walk from right most child\n");
 
@@ -273,7 +272,7 @@ void leaf_table_step(struct SubWalker *walker, struct SubWalkerList *list, struc
     walker->current_index = mid + 1;
 
     // Step 7.
-    read_cell_offset_into_row(walker->pager, row, walker->page_header, cell_offset, walker->first_col_is_rowid);
+    read_cell_offset_into_row(walker->pager, row, walker->page_header, cell_offset);
 
     if (row->column_count == 0) {
         fprintf(stderr, "leaf_table_step: Row has no values.\n");
@@ -299,7 +298,7 @@ void interior_index_step(struct SubWalker *walker, struct SubWalkerList *list, s
     while (lo < hi) {
         mid = lo + (hi - lo) / 2;
         // fprintf(stderr, "lo: %d, hi: %d, mid: %d\n", lo, hi, mid);
-        read_cell_offset_into_row(walker->pager, &index_row, walker->page_header, walker->cell_pointer_array[mid], false);
+        read_cell_offset_into_row(walker->pager, &index_row, walker->page_header, walker->cell_pointer_array[mid]);
         
         if (index_row.column_count < 1) {
             fprintf(stderr, "interior_index_step: Expected row to have at least 1 column\n");
@@ -327,9 +326,9 @@ void interior_index_step(struct SubWalker *walker, struct SubWalkerList *list, s
         should_free = false;
         read_cell(walker->pager, walker->page_header, walker->cell, walker->cell_pointer_array[mid]);
         uint32_t next_root_page = walker->cell->data.index_interior_cell.left_child_pointer;
-        new_walker = new_sub_walker(walker->pager, next_root_page, false, walker->index);
+        new_walker = new_sub_walker(walker->pager, next_root_page, walker->index);
     } else {
-        new_walker = new_sub_walker(walker->pager, pointer, false, walker->index);
+        new_walker = new_sub_walker(walker->pager, pointer, walker->index);
     }
 
     if (should_free) remove_last_walker(list);
@@ -351,7 +350,7 @@ void leaf_index_step(struct SubWalker *walker, struct SubWalkerList *list, struc
     while (lo < hi) {
         mid = lo + (hi - lo) / 2;
         // fprintf(stderr, "lo: %d, hi: %d, mid: %d\n", lo, hi, mid);
-        read_cell_offset_into_row(walker->pager, &index_row, walker->page_header, walker->cell_pointer_array[mid], false);
+        read_cell_offset_into_row(walker->pager, &index_row, walker->page_header, walker->cell_pointer_array[mid]);
 
         if (index_row.column_count < 1) {
             fprintf(stderr, "leaf_index_step: Expected row to have at least 1 column but has %lld\n", row->column_count);
@@ -366,7 +365,7 @@ void leaf_index_step(struct SubWalker *walker, struct SubWalkerList *list, struc
         }
     }
 
-    read_cell_offset_into_row(walker->pager, &index_row, walker->page_header, walker->cell_pointer_array[hi], false);
+    read_cell_offset_into_row(walker->pager, &index_row, walker->page_header, walker->cell_pointer_array[hi]);
     // print_row_to_stderr(&index_row);
     // @TODO: only workds for equals
     if (index_row.column_count < 1) {
@@ -449,7 +448,7 @@ void begin_walk(struct SubWalker *walker) {
     }
 }
 
-struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, bool first_col_is_rowid, struct Index *index) {
+struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, struct Index *index) {
     struct TreeWalker *walker = malloc(sizeof(struct TreeWalker));
     if (!walker) {
         fprintf(stderr, "new_tree_walker: *walker malloc failed\n");
@@ -469,7 +468,6 @@ struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, bool
     walker->pager               = pager;
     walker->root_page           = root_page;
     walker->table_list          = table_list;
-    walker->first_col_is_rowid  = first_col_is_rowid;
     walker->index               = index;
     walker->index_list          = NULL;
     walker->current_rowid       = 1;
@@ -486,20 +484,14 @@ struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, bool
         init_sub_walker_list(index_list);
         walker->index_list = index_list;
 
-        struct SubWalker *index_sub_walker = new_sub_walker(pager, index->root_page, false, walker->index);
+        struct SubWalker *index_sub_walker = new_sub_walker(pager, index->root_page, walker->index);
         add_sub_walker(index_list, index_sub_walker);
         fprintf(stderr, "Sub Walker page: %d\n", index_sub_walker->page);
         begin_walk(index_sub_walker);
     }
-
-    if (walker->first_col_is_rowid) {
-        fprintf(stderr, "First col is rowid\n");
-    } else {
-        fprintf(stderr, "First col is NOT rowid\n");
-    }
     
     uint32_t sub_walker_root_page = walker->root_page;
-    struct SubWalker *sub_walker = new_sub_walker(pager, sub_walker_root_page, walker->first_col_is_rowid, walker->index);
+    struct SubWalker *sub_walker = new_sub_walker(pager, sub_walker_root_page, walker->index);
     add_sub_walker(table_list, sub_walker);
     begin_walk(sub_walker);
 

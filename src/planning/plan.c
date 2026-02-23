@@ -62,13 +62,8 @@ static void collect_aggregates(struct ExprList *expr_list, struct Expr *expr) {
 
 struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt) {
     struct TableScan *plan = make_table_scan(pager, stmt);
-    struct Columns *columns = plan->columns;
 
     fprintf(stderr, "build_plan: columns:\n");
-    for (int i = 0; i < columns->count; i++) {
-        struct Column column = columns->data[i];
-        print_unterminated_string_to_stderr(&column.name);
-    }
 
     fprintf(stderr, "build_plan: make filter:\n");
     if (stmt->where_list != NULL) {
@@ -88,7 +83,7 @@ struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt) {
     fprintf(stderr, "build_plan: aggregates collected:\n");
 
     fprintf(stderr, "build_plan: make projection:\n");
-    plan = make_projection(plan, stmt->select_list, columns);
+    plan = make_projection(plan, pager, stmt);
     fprintf(stderr, "build_plan: projection made:\n");
     return plan;
 }

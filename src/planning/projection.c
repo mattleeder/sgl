@@ -3,6 +3,7 @@
 
 #include "../ast.h"
 #include "../sql_utils.h"
+#include "../parser.h"
 #include "plan.h"
 #include "../data_parsing/row_parsing.h"
 
@@ -13,17 +14,27 @@ struct Projection {
     struct Columns  *columns;
 };
 
-static struct Plan *make_projection(struct Plan *plan, struct ExprList *select_list, struct Columns *columns) {
+static struct Plan *make_projection(struct Plan *plan, struct Pager *pager, struct SelectStatement *stmt) {
     struct Projection *projection = malloc(sizeof(struct Projection));
     if (!projection) {
         fprintf(stderr, "make_projection: *projection malloc failed\n");
         exit(1);
     }
 
+    struct SchemaRecord *schema_record = get_schema_record_for_table(pager, stmt->from_table);
+    struct PageHeader page_header;
+    read_page_header(pager, &page_header, schema_record->body.root_page);
+
+    struct Parser parser_create;
+    // Empty pool, dont care about reserved words here
+    struct TriePool *reserved_words_pool = init_reserved_words();
+
+    struct Columns *columns = parse_create(&parser_create, schema_record->body.sql, reserved_words_pool);
+
     memset(projection, 0, sizeof *projection);
     projection->base.type    = PLAN_PROJECTION;
     projection->child        = plan;
-    projection->select_list  = select_list;
+    projection->select_list  = stmt->select_list;
     projection->columns      = columns;
 
     for (int i = 0; i < columns->count; i++) {

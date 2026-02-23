@@ -87,7 +87,7 @@ static void decode_column(uint8_t *data, struct ContentType type, struct Value *
     }
 }
 
-void read_row_from_record(struct Record *record, struct Row *row, int64_t rowid) {
+void read_row_from_record(struct Record *record, struct Row *row, struct Cell *cell) {
     row->column_count   = record->header.number_of_columns;
     row->values         = malloc(record->header.number_of_columns * sizeof(struct Value));
 
@@ -96,16 +96,27 @@ void read_row_from_record(struct Record *record, struct Row *row, int64_t rowid)
         exit(1);
     }
 
-    if (rowid > 0) {
-        row->values[0] = (struct Value){ .type = VALUE_INT, .int_value = (struct IntValue){ .value = rowid }};
+    for (int i = 0; i < record->header.number_of_columns; i++) {
+        decode_column(record->body.column_pointers[i], record->header.columns[i], &row->values[i]);
     }
 
-    for (int i = rowid > 0 ? 1 : 0; i < record->header.number_of_columns; i++) {
-        decode_column(record->body.column_pointers[i], record->header.columns[i], &row->values[i]);
+    switch (cell->type) {
+        case PAGE_LEAF_TABLE:
+            row->rowid = cell->data.table_leaf_cell.row_id;
+            break;
+
+        case PAGE_INTERIOR_INDEX:
+        case PAGE_LEAF_INDEX:
+            row->rowid = row->values[0].int_value.value;
+            break;
+        
+        default:
+            fprintf(stderr, "Cannot read record using page type: %d\n", cell->type);
+            exit(1);
     }
 }
 
-void read_cell_offset_into_row(struct Pager *pager, struct Row *row, struct PageHeader *page_header, uint16_t cell_offset, bool first_col_is_rowid) {
+void read_cell_offset_into_row(struct Pager *pager, struct Row *row, struct PageHeader *page_header, uint16_t cell_offset) {
     struct Cell cell;
     struct Record record;
 
@@ -117,9 +128,7 @@ void read_cell_offset_into_row(struct Pager *pager, struct Row *row, struct Page
         &record
     );
 
-    int64_t rowid = first_col_is_rowid ? cell.data.table_leaf_cell.row_id : 0;
-
-    read_row_from_record(&record, row, rowid);
+    read_row_from_record(&record, row, &cell);
 }
 
 void print_value(struct Value *value) {

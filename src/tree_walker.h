@@ -21,7 +21,6 @@ struct SubWalker {
     struct Cell         *cell;
     uint16_t            *cell_pointer_array;
     uint16_t            current_index;
-    bool                first_col_is_rowid;
     void (*step)(struct SubWalker *walker, struct SubWalkerList *list, struct Row *row, uint64_t *next_rowid, bool *rowid_valid);
     struct Index        *index;
 };
@@ -38,12 +37,11 @@ struct TreeWalker {
     uint32_t                root_page;
     struct SubWalkerList    *table_list;
     struct SubWalkerList    *index_list;
-    bool                    first_col_is_rowid;
     struct Index            *index;
     uint64_t                current_rowid;
 };
 
-struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, bool first_col_is_rowid, struct Index *index);
+struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, struct Index *index);
 void begin_walk(struct SubWalker *walker);
 bool produce_row(struct TreeWalker *walker, struct Row *row);
 
