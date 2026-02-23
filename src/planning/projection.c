@@ -28,7 +28,7 @@ static struct Plan *make_projection(struct Plan *plan, struct ExprList *select_l
 
     for (int i = 0; i < columns->count; i++) {
         struct Column column = columns->data[i];
-        fprintf(stderr, "make_projection: Column %d: %.*s\n", i, (int)column.name_length, column.name_start);
+        fprintf(stderr, "make_projection: Column %d: %.*s\n", i, (int)column.name.len, column.name.start);
     }
 
     return &projection->base;
@@ -62,10 +62,9 @@ static bool projection_next(struct Pager *pager, struct Projection *projection, 
                 // and then increment
                 for (int j = 0; j < projection->columns->count; j++) {
                     struct Column column = projection->columns->data[j];
-                    char *column_name   = column.name_start;
-                    size_t name_length  = column.name_length;
-                    uint32_t index      = column.index;
-                    if (name_length == current_expr->column.len && strncmp(column_name, current_expr->column.start, name_length) == 0) {
+                    struct UnterminatedString name  = column.name;
+                    uint32_t index                  = column.index;
+                    if (unterminated_string_equals(&name, &current_expr->column.name)) {
                         if (i != index) {
                             row->values[i] = original_row_order.values[index];
                         }

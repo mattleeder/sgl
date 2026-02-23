@@ -20,10 +20,9 @@ struct Plan {
 };
 
 struct Index {
-    char            *column_name_start;
-    size_t          column_name_length;
-    struct ExprBinary   *predicate;
-    uint32_t        root_page;
+    struct UnterminatedString   column_name;
+    struct ExprBinary           *predicate;
+    uint32_t                    root_page;
     // Column index applies to
     // Condition
 };

@@ -58,7 +58,7 @@ struct SchemaRecord *get_schema_record_for_table(struct Pager *pager, char *tabl
     exit(1);
 }
 
-uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_name, char *column_name_start, size_t column_name_length) {
+uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_name, struct UnterminatedString *column_name) {
     // Read schema
     int16_t number_of_tables = pager->schema_page_header->number_of_cells;
     uint16_t *schema_offsets = read_cell_pointer_array(pager, pager->schema_page_header);
@@ -98,7 +98,7 @@ uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_
 
         struct Column first_column = stmt->indexed_columns->data[0];
 
-        if (column_name_length != first_column.name_length || strncmp(column_name_start, first_column.name_start, first_column.name_length) != 0) {
+        if (!unterminated_string_equals(&first_column.name, column_name)) {
             free_columns(stmt->indexed_columns);
             free(stmt);
             continue;

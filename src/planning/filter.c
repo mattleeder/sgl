@@ -119,7 +119,7 @@ static struct Value expr_to_value(struct Expr *expr, struct Row *row, struct Col
             bool found = false;
             for (int i = 0; i < columns->count; i++) {
                 struct Column column = columns->data[i];
-                if (expr->column.len != column.name_length || strncmp(expr->column.start, column.name_start, column.name_length) != 0) {
+                if (!unterminated_string_equals(&expr->column.name, &column.name)) {
                     continue;
                 }
 
@@ -135,7 +135,7 @@ static struct Value expr_to_value(struct Expr *expr, struct Row *row, struct Col
             }
 
             if (!found) {
-                fprintf(stderr, "expr_to_value: Could not find column %*s.\n", expr->column.len, expr->column.start);
+                fprintf(stderr, "expr_to_value: Could not find column %*s.\n", expr->column.name.len, expr->column.name.start);
                 exit(1);
             }
             break;

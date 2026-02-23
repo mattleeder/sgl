@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "common.h"
 #include "memory.h"
 #include "sql_utils.h"
 
@@ -37,8 +38,7 @@ struct ExprString {
 };
 
 struct ExprColumn {
-    char    *start;
-    size_t  len;
+    struct UnterminatedString name;
 };
 
 enum AggType {

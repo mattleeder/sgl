@@ -67,7 +67,7 @@ struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt) {
     fprintf(stderr, "build_plan: columns:\n");
     for (int i = 0; i < columns->count; i++) {
         struct Column column = columns->data[i];
-        fprintf(stderr, "%.*s\n", (int)column.name_length, column.name_start);
+        print_unterminated_string_to_stderr(&column.name);
     }
 
     fprintf(stderr, "build_plan: make filter:\n");

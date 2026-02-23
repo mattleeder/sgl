@@ -14,7 +14,7 @@ void print_expr_column_to_stderr(struct ExprColumn *column, int padding) {
     assert(column != NULL);
 
     fprintf(stderr, "%*sColumn\n", padding, "");
-    fprintf(stderr, "%*sName: %*s\n", padding + 4, "", column->len, column->start);
+    fprintf(stderr, "%*sName: %*s\n", padding + 4, "", column->name.len, column->name.start);
 }
 
 void print_expr_function_to_stderr(struct ExprFunction *function, int padding) {
@@ -142,7 +142,7 @@ void get_column_from_expression(struct Expr *expr, struct ColumnToBoolHashMap *c
             break;
 
         case EXPR_COLUMN: {
-            struct Column column = { .index = 0, .name_start = expr->column.start, .name_length = expr->column.len };
+            struct Column column = { .index = 0, .name = {.start = expr->column.name.start, .len = expr->column.name.len } };
             hash_map_column_to_bool_set(columns, column, true);
             break;
         }
