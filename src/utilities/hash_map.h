@@ -40,6 +40,7 @@ static inline size_t hash_djb2(const char *string) {
 }
 
 static inline size_t hash_djb2_unterminated(const char *string, size_t len) {
+    fprintf(stderr, "hash_djb2_unterminated got: %.*s\n", len, string);
     size_t hash = 5381;
     for (int i = 0; i < len; i++)
         hash = ((hash << 5) + hash) + (unsigned char)string[i];

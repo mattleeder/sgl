@@ -166,6 +166,7 @@ void *hash_map_get(struct HashMap *hash_map, const void *key) {
     assert(hash_map);
     assert(hash_map->buckets_capacity > 0);
     assert(hash_map->data);
+    assert(key);
     
     size_t bucket_number = hash_map->hash_function(key) % hash_map->buckets_capacity;
 
@@ -191,6 +192,9 @@ bool hash_map_contains(struct HashMap *hash_map, const void *key) {
     assert(hash_map);
     assert(hash_map->buckets_capacity > 0);
     assert(hash_map->data);
+    assert(key);
+
+    fprintf(stderr, "hash_map->hash_function(key): %zu\n", hash_map->hash_function(key));
     size_t bucket_number = hash_map->hash_function(key) % hash_map->buckets_capacity;
 
     struct HashMapNode *curr_node = hash_map->data[bucket_number];
@@ -202,7 +206,7 @@ bool hash_map_contains(struct HashMap *hash_map, const void *key) {
         curr_node = curr_node->next;
     }
 
-    return curr_node ? true : false;
+    return curr_node != NULL;
 }
 
 void hash_map_free(struct HashMap *hash_map) {

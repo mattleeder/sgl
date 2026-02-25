@@ -48,8 +48,8 @@ static struct HashMap *get_full_row_col_to_idx_hash_map(struct Pager *pager, str
     struct HashMap *column_to_index = hash_map_column_to_index_new(
         INITIAL_HASH_MAP_CAPACITY,
         INITIAL_HASH_MAP_LOAD_FACTOR,
-        hash_column,
-        equals_column
+        hash_column_ptr,
+        equals_column_ptr
     );
 
     // Will iterate through tables when there are multiple
@@ -70,8 +70,8 @@ static struct HashMap *get_post_aggregation_row_col_to_idx_hash_map(struct Selec
         INITIAL_HASH_MAP_LOAD_FACTOR,
         sizeof(struct Column),
         sizeof(size_t),
-        hash_column,
-        equals_column
+        hash_column_ptr,
+        equals_column_ptr
     );
 
     for (size_t i = 0; i < stmt->select_list->count; i++) {

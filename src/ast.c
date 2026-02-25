@@ -170,8 +170,8 @@ struct HashMap *get_columns_from_expression_list(struct ExprList *expr_list) {
     struct HashMap *columns = hash_map_column_to_bool_new(
         HASH_MAP_MIN_CAPACITY,
         0.75,
-        hash_column,
-        equals_column
+        hash_column_ptr,
+        equals_column_ptr
     );
 
     struct Expr *expr;

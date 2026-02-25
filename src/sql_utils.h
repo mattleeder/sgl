@@ -29,12 +29,12 @@ struct Column {
     struct UnterminatedString   name;
 };
 
-static inline size_t hash_column(struct Column column) {
-    return hash_djb2_unterminated(column.name.start, column.name.len);
+static inline size_t hash_column_ptr(struct Column *column) {
+    return hash_djb2_unterminated(column->name.start, column->name.len);
 }
 
-static inline bool equals_column(struct Column a, struct Column b) {
-    return unterminated_string_equals(&a.name, &b.name);
+static inline bool equals_column_ptr(struct Column *a, struct Column *b) {
+    return unterminated_string_equals(&a->name, &b->name);
 }
 
 DEFINE_TYPED_HASH_MAP(struct Column, bool, ColumnToBool, column_to_bool)
