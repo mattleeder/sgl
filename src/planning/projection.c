@@ -19,7 +19,6 @@ static struct Plan *make_projection(struct Plan *plan, struct SizeTVec *indexes)
         exit(1);
     }
 
-    memset(projection, 0, sizeof *projection);
     projection->base.type       = PLAN_PROJECTION;
     projection->child           = plan;
     projection->column_indexes  = indexes;

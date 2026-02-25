@@ -79,6 +79,8 @@ struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt) {
 
     bool query_has_aggregates = (aggregate_exprs != NULL && aggregate_exprs->count > 0);
 
+    fprintf(stderr, "query_has_aggregates: %d\n", query_has_aggregates);
+
     fprintf(stderr, "build_plan: make resolver\n");
     struct Resolver *resolver = new_resolver(query_has_aggregates);
     resolver_init(resolver, pager, stmt);
@@ -105,6 +107,7 @@ struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt) {
 
     fprintf(stderr, "build_plan: make projection:\n");
     struct SizeTVec *indexes = get_projection_indexes(resolver, stmt);
+    fprintf(stderr, "Got indexes\n");
     plan = make_projection(plan, indexes);
     fprintf(stderr, "build_plan: projection made:\n");
     return plan;

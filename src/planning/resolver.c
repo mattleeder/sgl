@@ -161,29 +161,28 @@ struct Resolver *new_resolver(bool query_has_aggregates) {
 struct Resolver *resolver_init(struct Resolver *resolver, struct Pager *pager, struct SelectStatement *stmt) {
 
     resolver->full_row_col_to_idx = get_full_row_col_to_idx_hash_map(pager, stmt);
-    fprintf(stderr, "Got full row\n");
     resolver->post_agg_row_col_to_idx = get_post_aggregation_row_col_to_idx_hash_map(stmt);
-    fprintf(stderr, "Got agg row\n");
 
     return resolver;
 }
 
 struct SizeTVec *get_projection_indexes(struct Resolver *resolver, struct SelectStatement *stmt) {
     struct HashMap *hash_map = resolver->query_has_aggregates ? resolver->post_agg_row_col_to_idx : resolver->full_row_col_to_idx;
+    assert(hash_map != NULL);
     struct SizeTVec *indexes = vector_size_t_new();
 
     // @TODO: currently only handling column expr
-    for (size_t i = 0; stmt->select_list->count; i++) {
+    for (size_t i = 0; i < stmt->select_list->count; i++) {
         struct Expr *expr = &stmt->select_list->data[i];
         if (expr->type != EXPR_COLUMN) {
             continue;
         }
 
         struct Column column = { .index = 0, .name = expr->column.name };
-        size_t idx = hash_map_column_to_index_get(hash_map, &column);
+        size_t *idx = hash_map_column_to_index_get(hash_map, &column);
+        assert(idx != NULL);
 
-        fprintf(stderr, "pushing %zu\n", idx);
-        vector_size_t_push(indexes, idx);
+        vector_size_t_push(indexes, *idx);
     }
 
     return indexes;

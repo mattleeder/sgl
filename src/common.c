@@ -5,6 +5,7 @@
 #include "common.h"
 
 bool unterminated_string_equals(struct UnterminatedString *a, struct UnterminatedString *b) {
+    fprintf(stderr, "unterminated_string_equals: comparing '%.*s' and '%.*s'\n", a->len, a->start, b->len, b->start);
     if (a->len != b->len) {
         return false;
     }

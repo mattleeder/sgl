@@ -50,11 +50,7 @@ static struct BinaryExprList *collect_index_predicates(struct IndexData *index_d
 
     struct BinaryExprList *expr_list = vector_binary_expr_list_new();
 
-    fprintf(stderr, "A\n");
-
     struct HashMap *hash_map = get_hash_map_from_columns_array(index_data->columns);
-
-    fprintf(stderr, "B\n");
 
     struct Expr *expr;
     for (int i = 0; i < stmt->where_list->count; i++) {
@@ -70,49 +66,32 @@ static struct BinaryExprList *collect_index_predicates(struct IndexData *index_d
             hash_column_ptr,
             equals_column_ptr
         );
-
-        fprintf(stderr, "C\n");
         
         get_column_from_expression(expr, columns_hash_map);
-
-        fprintf(stderr, "D\n");
 
         size_t columns_element_count;
         struct Column **columns = hash_map_column_to_bool_get_keys_alloc(columns_hash_map, &columns_element_count);
         struct Column *column;
 
-        fprintf(stderr, "E: there are %zu columns\n", columns_element_count);
-
         bool index_contains_all_columns = true;
         for (int j = 0; j < columns_element_count; j++) {
             column = columns[j];
 
-            fprintf(stderr, "Pre\n");
             if (!hash_map_column_to_bool_contains(hash_map, column)) {
                 index_contains_all_columns = false;
                 break;
             }
-            fprintf(stderr, "Post\n");
 
         }
-
-        fprintf(stderr, "F\n");
 
         if (index_contains_all_columns) {
-            fprintf(stderr, "Pushing\n");
             vector_binary_expr_list_push(expr_list, expr->binary);
-            fprintf(stderr, "Count is now %zu\n", expr_list->count);
         }
-
-        fprintf(stderr, "H\n");
-
 
         free(columns);
         hash_map_column_to_bool_free(columns_hash_map);
         free(columns_hash_map);
     }
-
-    fprintf(stderr, "I\n");
 
     hash_map_column_to_bool_free(hash_map);
     free(hash_map);

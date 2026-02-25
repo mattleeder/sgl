@@ -70,6 +70,7 @@ struct HashMap *hash_map_new(size_t initial_capacity,
 }
 
 bool hash_map_grow(struct HashMap *hash_map) {
+    fprintf(stderr, "HASH_MAP GROW GROW GROW\n");
     assert(hash_map);
 
     size_t old_capacity = hash_map->buckets_capacity;
@@ -114,6 +115,7 @@ bool hash_map_set(struct HashMap *hash_map, const void *key, const void *value) 
     assert(hash_map->data);
 
     size_t bucket_number = hash_map->hash_function(key) % hash_map->buckets_capacity;
+    fprintf(stderr, "bucket_number: %d\n", bucket_number);
 
     struct HashMapNode *old_head = hash_map->data[bucket_number];
     struct HashMapNode *curr = old_head;
@@ -134,7 +136,8 @@ bool hash_map_set(struct HashMap *hash_map, const void *key, const void *value) 
 
     hash_map->element_count++;
 
-    new_node->key = malloc(hash_map->key_size);
+    new_node->next  = old_head;
+    new_node->key   = malloc(hash_map->key_size);
     new_node->value = malloc(hash_map->value_size);
 
     if (!new_node->key) {
@@ -159,6 +162,13 @@ bool hash_map_set(struct HashMap *hash_map, const void *key, const void *value) 
         hash_map_grow(hash_map);
     }
 
+    if (hash_map->value_size == sizeof(size_t)) {
+        fprintf(stderr, "Set (size_t): %zu\n", *(size_t *)value);
+    } else if (hash_map->value_size == sizeof(bool)) {
+        fprintf(stderr, "Set (bool): %d\n", *(bool *)value);
+    }
+
+
     return true;
 }
 
@@ -169,6 +179,7 @@ void *hash_map_get(struct HashMap *hash_map, const void *key) {
     assert(key);
     
     size_t bucket_number = hash_map->hash_function(key) % hash_map->buckets_capacity;
+    fprintf(stderr, "bucket_number: %d\n", bucket_number);
 
     struct HashMapNode *curr_node = hash_map->data[bucket_number];
 
@@ -180,12 +191,19 @@ void *hash_map_get(struct HashMap *hash_map, const void *key) {
     }
 
     if (curr_node) {
-        fprintf(stderr, "value: %zu\n", (size_t)curr_node->value);
+
+        const void *value = curr_node->value;
+        if (hash_map->value_size == sizeof(size_t)) {
+            fprintf(stderr, "Value (size_t): %zu\n", *(size_t *)value);
+        } else if (hash_map->value_size == sizeof(bool)) {
+            fprintf(stderr, "Value (bool): %d\n", *(bool *)value);
+        }
+
     } else {
         fprintf(stderr, "value: NULL\n");
     }
 
-    return curr_node ? curr_node->value : NULL;
+    return curr_node == NULL ? NULL : curr_node->value;
 }
 
 bool hash_map_contains(struct HashMap *hash_map, const void *key) {

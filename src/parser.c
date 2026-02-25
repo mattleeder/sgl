@@ -189,7 +189,7 @@ static struct Expr *parse_expression(struct Parser *parser, struct Scanner *scan
             break;
 
         default:
-            expr_left->text = (struct UnterminatedString){ .start = start, .len = (size_t)(scanner->current - start)};
+            expr_left->text = (struct UnterminatedString){ .start = start, .len = (size_t)(parser->previous.start + parser->previous.length - start)};
             return expr_left;
             
     }
@@ -198,7 +198,7 @@ static struct Expr *parse_expression(struct Parser *parser, struct Scanner *scan
     struct Expr *expr_right = parse_term(parser, scanner);
 
     binary_expr->binary.right = expr_right;
-    binary_expr->text = (struct UnterminatedString){ .start = start, .len = (size_t)(scanner->current - start)};
+    binary_expr->text = (struct UnterminatedString){ .start = start, .len = (size_t)(parser->previous.start + parser->previous.length - start)};
     return binary_expr;
 }
 
