@@ -25,11 +25,7 @@ struct SubWalker {
     struct IndexData    *index;
 };
 
-struct SubWalkerList {
-    size_t              count;
-    size_t              capacity;
-    struct SubWalker   **list;
-};
+DEFINE_VECTOR(struct SubWalker*, SubWalkerList, sub_walker_list)
 
 struct TreeWalker {
     enum WalkerType         type;

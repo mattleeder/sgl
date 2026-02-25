@@ -158,7 +158,7 @@ static bool evaluate_predicate(struct Expr *predicate, struct Row *row) {
             break;
 
         default:
-            fprintf(stderr, "Op unsupported %d.\n", predicate->binary.op);
+            fprintf(stderr, "evaluate_predicate: Op unsupported %d.\n", predicate->binary.op);
             exit(1);
 
     }
@@ -184,8 +184,9 @@ static struct Plan *make_filter(struct Plan *plan, struct ExprList *predicates) 
 
 static bool filter_next(struct Pager *pager, struct Filter *filter, struct Row *row) {
     // Filter rows based on predicate
-
+    // @TODO: doesnt need to filter rows already filtered by index
     while (plan_next(pager, filter->child, row)) {
+        print_row_to_stderr(row);
         bool predicate_success = true;
 
         for (int i = 0; i < filter->predicates->count; i++) {
@@ -198,6 +199,7 @@ static bool filter_next(struct Pager *pager, struct Filter *filter, struct Row *
         }
 
         if (predicate_success) {
+            fprintf(stderr, "Return row\n");
             return true;
         }
     }

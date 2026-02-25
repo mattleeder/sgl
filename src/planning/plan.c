@@ -122,15 +122,19 @@ static bool plan_next(struct Pager *pager, struct Plan *plan, struct Row *row) {
     switch(plan->type) {
 
         case PLAN_TABLE_SCAN:
+            // fprintf(stderr, "table_scan_next\n");
             return table_scan_next(pager, plan, row);
 
         case PLAN_AGGREGATE:
+            // fprintf(stderr, "aggregate_next\n");
             return aggregate_next(pager, (struct Aggregate *)plan, row);
 
         case PLAN_FILTER:
+            // fprintf(stderr, "filter_next\n");
             return filter_next(pager, (struct Filter *)plan, row);
 
         case PLAN_PROJECTION:
+            // fprintf(stderr, "projection_next\n");
             return projection_next(pager, plan, row);
 
         default:
@@ -142,6 +146,7 @@ void plan_execute(struct Pager *pager, struct Plan *plan) {
     fprintf(stderr, "Execute Plan\n");
     struct Row row;
     while (plan_next(pager, plan, &row)) {
+        fprintf(stderr, "Printing row\n");
         print_row(&row);
         free(row.values);
         row.values = NULL;

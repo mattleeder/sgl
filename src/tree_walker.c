@@ -39,48 +39,23 @@
 // 5. Iterate over each cell in order, at each cell visit that page and go back to step 2.
 // 6. Read right most pointer and visit that page
 // 7. If the page is a leaf table page, iterate over each cell in order and produce a row
-
-void init_sub_walker_list(struct SubWalkerList *tree_walker_list) {
-    tree_walker_list->count          = 0;
-    tree_walker_list->capacity       = 0;
-    tree_walker_list->list           = NULL;
-}
-
 void free_sub_walker(struct SubWalker *walker) {
     free(walker->page_header);
-    free(walker->cell_pointer_array);
     free(walker->cell);
+    free(walker->cell_pointer_array);
     walker->page                = 0;
     walker->pager               = NULL;
     walker->page_header         = NULL;
+    walker->cell                = NULL;
     walker->cell_pointer_array  = NULL;
-}
-
-void free_sub_walker_list(struct SubWalkerList *sub_walker_list) {
-    for (int i = 0; i < sub_walker_list->count; i++) {
-        free_sub_walker(sub_walker_list->list[i]);
-    }
-    FREE_ARRAY(struct SubWalker *, sub_walker_list->list, sub_walker_list->capacity);
-    init_sub_walker_list(sub_walker_list);
+    walker->step                = NULL;
+    walker->index               = NULL;
 }
 
 void free_tree_walker(struct TreeWalker *walker) {
-    free_sub_walker_list(walker->table_list);
-    free_sub_walker_list(walker->index_list);
-    free(walker->table_list);
-    free(walker->index_list);
+    vector_sub_walker_list_free(walker->table_list);
+    vector_sub_walker_list_free(walker->index_list);
     free(walker);
-}
-
-void add_sub_walker(struct SubWalkerList *sub_walker_list, struct SubWalker *walker) {
-    if (sub_walker_list->capacity < sub_walker_list->count + 1) {
-        int old_capacity = sub_walker_list->capacity;
-        sub_walker_list->capacity       = grow_capacity(old_capacity);
-        sub_walker_list->list           = GROW_ARRAY(struct SubWalker *, sub_walker_list->list, old_capacity, sub_walker_list->capacity);
-    }
-
-    sub_walker_list->list[sub_walker_list->count]        = walker;
-    sub_walker_list->count++;
 }
 
 void remove_last_walker(struct SubWalkerList *sub_walker_list) {
@@ -89,7 +64,7 @@ void remove_last_walker(struct SubWalkerList *sub_walker_list) {
         exit(1);
     }
 
-    free_sub_walker(sub_walker_list->list[sub_walker_list->count - 1]);
+    free_sub_walker(sub_walker_list->data[sub_walker_list->count - 1]);
     sub_walker_list->count--;
 }
 
@@ -226,7 +201,7 @@ void interior_table_step(struct SubWalker *walker, struct SubWalkerList *list, s
 
     // @TODO: dont keep initialsing new walkers
     begin_walk(new_walker);
-    add_sub_walker(list, new_walker);
+    vector_sub_walker_list_push(list, new_walker);
     return;
 }
 
@@ -288,16 +263,15 @@ void leaf_table_step(struct SubWalker *walker, struct SubWalkerList *list, struc
 void interior_index_step(struct SubWalker *walker, struct SubWalkerList *list, struct Row *row, uint64_t *next_rowid, bool *rowid_valid) {
     // fprintf(stderr, "interior_index_step, page: %d\n", walker->page_header->page_number);
     struct Row index_row;
-    struct Value predicate_value = get_predicate_value(&walker->index->predicates[0]);
+    struct ExprBinary predicate = walker->index->predicates->data[0];
+    struct Value predicate_value = get_predicate_value(&predicate);
     
     // Binary search to find first key where predicate is met
     uint16_t lo = walker->current_index;
     uint16_t hi = walker->page_header->number_of_cells - 1;
     uint16_t mid = lo + (hi - lo) / 2;
-    
     while (lo < hi) {
         mid = lo + (hi - lo) / 2;
-        // fprintf(stderr, "lo: %d, hi: %d, mid: %d\n", lo, hi, mid);
         read_cell_offset_into_row(walker->pager, &index_row, walker->page_header, walker->cell_pointer_array[mid]);
         
         if (index_row.column_count < 1) {
@@ -306,7 +280,7 @@ void interior_index_step(struct SubWalker *walker, struct SubWalkerList *list, s
         }
 
         // Evaluate record body against given index
-        if (compare_index_predicate(&walker->index->predicates[0], &index_row.values[0], &predicate_value)) {
+        if (compare_index_predicate(&predicate, &index_row.values[0], &predicate_value)) {
             hi = mid;
         } else {
             lo =  mid + 1;
@@ -333,14 +307,15 @@ void interior_index_step(struct SubWalker *walker, struct SubWalkerList *list, s
 
     if (should_free) remove_last_walker(list);
    
-    add_sub_walker(list, new_walker);
+    vector_sub_walker_list_push(list, new_walker);
     begin_walk(new_walker);
 }
 
 void leaf_index_step(struct SubWalker *walker, struct SubWalkerList *list, struct Row *row, uint64_t *next_rowid, bool *rowid_valid) {
     // fprintf(stderr, "leaf_index_step\n");
     struct Row index_row;
-    struct Value predicate_value = get_predicate_value(&walker->index->predicates[0]);
+    struct ExprBinary predicate = walker->index->predicates->data[0];
+    struct Value predicate_value = get_predicate_value(&predicate);
     
     // Binary search to find first key where predicate is met
     uint16_t lo = walker->current_index;
@@ -358,7 +333,7 @@ void leaf_index_step(struct SubWalker *walker, struct SubWalkerList *list, struc
         }
         
         // Evaluate record body against given index
-        if (compare_index_predicate(&walker->index->predicates[0], &index_row.values[0], &predicate_value)) {
+        if (compare_index_predicate(&predicate, &index_row.values[0], &predicate_value)) {
             hi = mid;
         } else {
             lo =  mid + 1;
@@ -393,6 +368,7 @@ void leaf_index_step(struct SubWalker *walker, struct SubWalkerList *list, struc
 }
 
 void begin_walk(struct SubWalker *walker) {
+    // fprintf(stderr, "begin_walk: called\n");
 
     if (walker->page_header == NULL) {
         fprintf(stderr, "page_header is NULL.\n");
@@ -455,14 +431,7 @@ struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, stru
         exit(1);
     }
 
-    struct SubWalkerList *table_list = malloc(sizeof(struct SubWalkerList));
-    if (!table_list) {
-        fprintf(stderr, "new_tree_walker: *table_list malloc failed\n");
-        exit(1);
-    }
-
-    
-    init_sub_walker_list(table_list);
+    struct SubWalkerList *table_list = vector_sub_walker_list_new();
 
     walker->type                = index == NULL ? WALKER_FULL_SCAN : WALKER_INDEX_SCAN;
     walker->pager               = pager;
@@ -475,24 +444,18 @@ struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, stru
     if (walker->type == WALKER_INDEX_SCAN) {
         fprintf(stderr, "Index root page is %d\n", index->root_page);
 
-        struct SubWalkerList *index_list = malloc(sizeof(struct SubWalkerList));
-        if (!index_list) {
-            fprintf(stderr, "new_tree_walker: *index_list malloc failed\n");
-            exit(1);
-        }
-
-        init_sub_walker_list(index_list);
+        struct SubWalkerList *index_list = vector_sub_walker_list_new();
         walker->index_list = index_list;
 
         struct SubWalker *index_sub_walker = new_sub_walker(pager, index->root_page, walker->index);
-        add_sub_walker(index_list, index_sub_walker);
+        vector_sub_walker_list_push(index_list, index_sub_walker);
         fprintf(stderr, "Sub Walker page: %d\n", index_sub_walker->page);
         begin_walk(index_sub_walker);
     }
     
     uint32_t sub_walker_root_page = walker->root_page;
     struct SubWalker *sub_walker = new_sub_walker(pager, sub_walker_root_page, walker->index);
-    add_sub_walker(table_list, sub_walker);
+    vector_sub_walker_list_push(table_list, sub_walker);
     begin_walk(sub_walker);
 
     return walker;
@@ -502,7 +465,7 @@ bool produce_rowid(struct TreeWalker *walker, struct Row *row, uint64_t *next_ro
     // fprintf(stderr, "produce_rowid\n");
     bool rowid_valid = false;
     while (walker->index_list->count > 0) {
-        struct SubWalker *last_sub_walker = walker->index_list->list[walker->index_list->count - 1];
+        struct SubWalker *last_sub_walker = walker->index_list->data[walker->index_list->count - 1];
         take_step(last_sub_walker, walker->index_list, row, next_rowid, &rowid_valid);
         if (rowid_valid) {
             break;
@@ -542,7 +505,7 @@ bool produce_row(struct TreeWalker *walker, struct Row *row) {
     // fprintf(stderr, "Search in table tree for rowid: %lld\n", next_rowid);
     bool row_valid = false;
     while (walker->table_list->count > 0) {
-        struct SubWalker *last_sub_walker = walker->table_list->list[walker->table_list->count - 1];
+        struct SubWalker *last_sub_walker = walker->table_list->data[walker->table_list->count - 1];
         take_step(last_sub_walker, walker->table_list, row, &next_rowid, &row_valid);
         if (row_valid) {
             break;
@@ -553,9 +516,7 @@ bool produce_row(struct TreeWalker *walker, struct Row *row) {
         return false;
     }
 
-    // fprintf(stderr, "\n\n Produced row:\n\n");
     // print_row_to_stderr(row);
-    // fprintf(stderr, "\n\n");
     walker->current_rowid++;
     return true;
 }

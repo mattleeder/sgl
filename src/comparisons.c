@@ -91,7 +91,7 @@ bool compare_index_predicate(struct ExprBinary *predicate, struct Value *column_
             break;
 
         default:
-            fprintf(stderr, "Op unsupported %d.\n", predicate->op);
+            fprintf(stderr, "compare_index_predicate: Op unsupported %d.\n", predicate->op);
             exit(1);
 
     }
