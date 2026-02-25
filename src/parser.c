@@ -44,8 +44,9 @@ static struct Expr *new_expr(enum ExprType type) {
 
 static struct Expr *make_column_expr(char *start, size_t len) {
     struct Expr *expr = new_expr(EXPR_COLUMN);
-    expr->column.name.start  = start;
-    expr->column.name.len    = len;
+    expr->column.idx            = 0; // To be resolved later
+    expr->column.name.start     = start;
+    expr->column.name.len       = len;
     return expr;
 }
 
@@ -179,6 +180,7 @@ static struct Expr *parse_term(struct Parser *parser, struct Scanner *scanner) {
 }
 
 static struct Expr *parse_expression(struct Parser *parser, struct Scanner *scanner) {
+    const char *start = scanner->start;
     struct Expr *expr_left = parse_term(parser, scanner);
     struct Expr *binary_expr = NULL;
 
@@ -197,6 +199,7 @@ static struct Expr *parse_expression(struct Parser *parser, struct Scanner *scan
             break;
 
         default:
+            expr_left->text = (struct UnterminatedString){ .start = start, .len = (size_t)(scanner->current - start)};
             return expr_left;
             
     }
@@ -205,6 +208,7 @@ static struct Expr *parse_expression(struct Parser *parser, struct Scanner *scan
     struct Expr *expr_right = parse_term(parser, scanner);
 
     binary_expr->binary.right = expr_right;
+    binary_expr->text = (struct UnterminatedString){ .start = start, .len = (size_t)(scanner->current - start)};
     return binary_expr;
 }
 

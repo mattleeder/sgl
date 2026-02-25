@@ -38,7 +38,8 @@ struct ExprString {
 };
 
 struct ExprColumn {
-    struct UnterminatedString name;
+    size_t                      idx; // @TODO: not sure if this should be here
+    struct UnterminatedString   name;
 };
 
 enum AggType {
@@ -73,7 +74,8 @@ struct ExprStar {
 };
 
 struct Expr {
-    enum ExprType type;
+    enum ExprType               type;
+    struct UnterminatedString   text;
 
     union {
         struct ExprInteger      integer;
@@ -119,8 +121,8 @@ void print_select_statement_to_stderr(struct SelectStatement *stmt, int padding)
 
 void print_binary_expr_list_to_stderr(struct BinaryExprList *expr_list, int padding);
 
-void get_column_from_expression(struct Expr *expr, struct ColumnToBoolHashMap *columns);
-struct ColumnToBoolHashMap *get_columns_from_expression_list(struct ExprList *expr_list);
+void get_column_from_expression(struct Expr *expr, struct HashMap *columns);
+struct HashMap *get_columns_from_expression_list(struct ExprList *expr_list);
 struct IndexComparisonArray *get_index_comparisons(struct ExprList *expr_list);
 
 #endif

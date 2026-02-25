@@ -288,7 +288,7 @@ void leaf_table_step(struct SubWalker *walker, struct SubWalkerList *list, struc
 void interior_index_step(struct SubWalker *walker, struct SubWalkerList *list, struct Row *row, uint64_t *next_rowid, bool *rowid_valid) {
     // fprintf(stderr, "interior_index_step, page: %d\n", walker->page_header->page_number);
     struct Row index_row;
-    struct Value predicate_value = get_predicate_value(walker->index->predicate);
+    struct Value predicate_value = get_predicate_value(&walker->index->predicates[0]);
     
     // Binary search to find first key where predicate is met
     uint16_t lo = walker->current_index;
@@ -306,7 +306,7 @@ void interior_index_step(struct SubWalker *walker, struct SubWalkerList *list, s
         }
 
         // Evaluate record body against given index
-        if (compare_index_predicate(walker->index->predicate, &index_row.values[0], &predicate_value)) {
+        if (compare_index_predicate(&walker->index->predicates[0], &index_row.values[0], &predicate_value)) {
             hi = mid;
         } else {
             lo =  mid + 1;
@@ -340,7 +340,7 @@ void interior_index_step(struct SubWalker *walker, struct SubWalkerList *list, s
 void leaf_index_step(struct SubWalker *walker, struct SubWalkerList *list, struct Row *row, uint64_t *next_rowid, bool *rowid_valid) {
     // fprintf(stderr, "leaf_index_step\n");
     struct Row index_row;
-    struct Value predicate_value = get_predicate_value(walker->index->predicate);
+    struct Value predicate_value = get_predicate_value(&walker->index->predicates[0]);
     
     // Binary search to find first key where predicate is met
     uint16_t lo = walker->current_index;
@@ -358,7 +358,7 @@ void leaf_index_step(struct SubWalker *walker, struct SubWalkerList *list, struc
         }
         
         // Evaluate record body against given index
-        if (compare_index_predicate(walker->index->predicate, &index_row.values[0], &predicate_value)) {
+        if (compare_index_predicate(&walker->index->predicates[0], &index_row.values[0], &predicate_value)) {
             hi = mid;
         } else {
             lo =  mid + 1;
@@ -448,7 +448,7 @@ void begin_walk(struct SubWalker *walker) {
     }
 }
 
-struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, struct Index *index) {
+struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, struct IndexData *index) {
     struct TreeWalker *walker = malloc(sizeof(struct TreeWalker));
     if (!walker) {
         fprintf(stderr, "new_tree_walker: *walker malloc failed\n");

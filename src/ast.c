@@ -5,6 +5,9 @@
 #include "ast.h"
 #include "sql_utils.h"
 #include "comparisons.h"
+#include "memory.h"
+
+#define HASH_MAP_MIN_CAPACITY (8)
 
 void print_expr_star_to_stderr(int padding) {
     fprintf(stderr, "%*sStar\n", padding, "");
@@ -134,7 +137,7 @@ void print_binary_expr_list_to_stderr(struct BinaryExprList *expr_list, int padd
     }
 }
 
-void get_column_from_expression(struct Expr *expr, struct ColumnToBoolHashMap *columns) {
+void get_column_from_expression(struct Expr *expr, struct HashMap *columns) {
     switch(expr->type) {
         case EXPR_INTEGER:
         case EXPR_STRING:
@@ -143,7 +146,8 @@ void get_column_from_expression(struct Expr *expr, struct ColumnToBoolHashMap *c
 
         case EXPR_COLUMN: {
             struct Column column = { .index = 0, .name = {.start = expr->column.name.start, .len = expr->column.name.len } };
-            hash_map_column_to_bool_set(columns, column, true);
+            bool set_value = true;
+            hash_map_column_to_bool_set(columns, &column, &set_value);
             break;
         }
 
@@ -162,14 +166,13 @@ void get_column_from_expression(struct Expr *expr, struct ColumnToBoolHashMap *c
     }
 }
 
-struct ColumnToBoolHashMap *get_columns_from_expression_list(struct ExprList *expr_list) {
-    struct ColumnToBoolHashMap *columns = malloc(sizeof(struct ColumnToBoolHashMap));
-    if (!columns) {
-        fprintf(stderr, "get_columns_from_expression_list: failed to malloc *columns.\n");
-        exit(1);
-    }
-
-    hash_map_column_to_bool_init(columns, 8, 0.75);
+struct HashMap *get_columns_from_expression_list(struct ExprList *expr_list) {
+    struct HashMap *columns = hash_map_column_to_bool_new(
+        HASH_MAP_MIN_CAPACITY,
+        0.75,
+        hash_column,
+        equals_column
+    );
 
     struct Expr *expr;
     for (int i = 0; i < expr_list->count; i++) {

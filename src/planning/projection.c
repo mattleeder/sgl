@@ -3,44 +3,26 @@
 
 #include "../ast.h"
 #include "../sql_utils.h"
-#include "../parser.h"
 #include "plan.h"
 #include "../data_parsing/row_parsing.h"
 
 struct Projection {
     struct Plan     base;
     struct Plan     *child;
-    struct ExprList *select_list;
-    struct Columns  *columns;
+    struct SizeTVec *column_indexes;
 };
 
-static struct Plan *make_projection(struct Plan *plan, struct Pager *pager, struct SelectStatement *stmt) {
+static struct Plan *make_projection(struct Plan *plan, struct SizeTVec *indexes) {
     struct Projection *projection = malloc(sizeof(struct Projection));
     if (!projection) {
         fprintf(stderr, "make_projection: *projection malloc failed\n");
         exit(1);
     }
 
-    struct SchemaRecord *schema_record = get_schema_record_for_table(pager, stmt->from_table);
-    struct PageHeader page_header;
-    read_page_header(pager, &page_header, schema_record->body.root_page);
-
-    struct Parser parser_create;
-    // Empty pool, dont care about reserved words here
-    struct TriePool *reserved_words_pool = init_reserved_words();
-
-    struct Columns *columns = parse_create(&parser_create, schema_record->body.sql, reserved_words_pool);
-
     memset(projection, 0, sizeof *projection);
-    projection->base.type    = PLAN_PROJECTION;
-    projection->child        = plan;
-    projection->select_list  = stmt->select_list;
-    projection->columns      = columns;
-
-    for (int i = 0; i < columns->count; i++) {
-        struct Column column = columns->data[i];
-        fprintf(stderr, "make_projection: Column %d: %.*s\n", i, (int)column.name.len, column.name.start);
-    }
+    projection->base.type       = PLAN_PROJECTION;
+    projection->child           = plan;
+    projection->column_indexes  = indexes;
 
     return &projection->base;
 }
@@ -61,42 +43,12 @@ static bool projection_next(struct Pager *pager, struct Projection *projection, 
     }
     memcpy(original_row_order.values, row->values, row->column_count * sizeof(struct Value));
 
-
-    for (int i = 0; i < projection->select_list->count; i++) {
-        struct Expr *current_expr = &projection->select_list->data[i];
-
-        switch (current_expr->type) {
-
-            case EXPR_COLUMN:
-                // @TODO: should only be calculating this once
-                // Iterate over all columns, if there is a match move that value to column index
-                // and then increment
-                for (int j = 0; j < projection->columns->count; j++) {
-                    struct Column column = projection->columns->data[j];
-                    struct UnterminatedString name  = column.name;
-                    uint32_t index                  = column.index;
-                    if (unterminated_string_equals(&name, &current_expr->column.name)) {
-                        if (i != index) {
-                            row->values[i] = original_row_order.values[index];
-                        }
-                        break;
-                    }
-                }
-                break;
-
-            case EXPR_FUNCTION:
-                // @TODO: find function
-                fprintf(stderr, "Printing function\n");
-                row->column_count = 2; // Id and result
-                break;
-
-            default:
-                fprintf(stderr, "Unsupported ExprType for projection_next: %d\n", current_expr->type);
-                exit(1);
-        }
+    for (size_t i = 0; i < projection->column_indexes->count; i++) {
+        size_t idx = projection->column_indexes->data[i];
+        row->values[i] = original_row_order.values[idx];
     }
 
     free(original_row_order.values);
-    row->column_count = projection->select_list->count;
+    row->column_count = projection->column_indexes->count;
     return true;
 }

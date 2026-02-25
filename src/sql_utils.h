@@ -11,6 +11,8 @@
 #include "pager.h"
 #include "common.h"
 
+#include "./utilities/hash_map.h"
+
 struct IndexColumns {
     struct Columns  *columns;
     uint32_t        root_page;
@@ -35,7 +37,7 @@ static inline bool equals_column(struct Column a, struct Column b) {
     return unterminated_string_equals(&a.name, &b.name);
 }
 
-DEFINE_HASH_MAP(struct Column, bool, ColumnToBool, column_to_bool, hash_column, equals_column)
+DEFINE_TYPED_HASH_MAP(struct Column, bool, ColumnToBool, column_to_bool)
 
 DEFINE_VECTOR(struct Column, Columns, columns)
 DEFINE_VECTOR(struct IndexColumns, IndexColumnsArray, index_columns_array)

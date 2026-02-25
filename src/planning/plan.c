@@ -7,13 +7,15 @@
 #include "../sql_utils.h"
 #include "../data_parsing/row_parsing.h"
 #include "../ast.h"
+#include "../parser.h"
 
+#include "resolver.h"
 #include "projection.c"
 #include "aggregate.c"
 #include "filter.c"
 #include "table_scan.c"
 
-static bool is_aggregate_function(char *function_name) {
+static bool is_aggregate_function(const char *function_name) {
     return strcmp(function_name, "count") == 0;
 }
 
@@ -41,6 +43,8 @@ static bool expr_contains_aggregate(struct Expr *expr) {
 }
 
 static bool expr_list_contains_aggregate(struct ExprList *expr_list) {
+    if (!expr_list) return false;
+
     for (int i = 0; i < expr_list->count; i++) {
         if (expr_contains_aggregate(&expr_list->data[i])) {
             return true;
@@ -61,29 +65,47 @@ static void collect_aggregates(struct ExprList *expr_list, struct Expr *expr) {
 }
 
 struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt) {
+    assert(stmt);
+    assert(stmt->from_table);
+    assert(stmt->select_list);
+
+    fprintf(stderr, "Building plan\n");
+    struct ExprList *aggregate_exprs = new_expr_list();
+    for (int i = 0; i < stmt->select_list->count; i++) {
+        fprintf(stderr, "loop\n");
+        collect_aggregates(aggregate_exprs, &stmt->select_list->data[i]);
+    }
+    fprintf(stderr, "Collected aggregates\n");
+
+    bool query_has_aggregates = (aggregate_exprs != NULL && aggregate_exprs->count > 0);
+
+    fprintf(stderr, "build_plan: make resolver\n");
+    struct Resolver *resolver = new_resolver(query_has_aggregates);
+    resolver_init(resolver, pager, stmt);
+
+    fprintf(stderr, "build_plan: make table scan\n");
     struct TableScan *plan = make_table_scan(pager, stmt);
 
     fprintf(stderr, "build_plan: columns:\n");
 
     fprintf(stderr, "build_plan: make filter:\n");
     if (stmt->where_list != NULL) {
-        plan = make_filter(plan, stmt->where_list, columns);
+        resolve_column_names(resolver, stmt->where_list);
+        plan = make_filter(plan, stmt->where_list);
     }
     fprintf(stderr, "build_plan: filter made:\n");
 
     fprintf(stderr, "build_plan: collect aggregates:\n");
-    struct ExprList *expr_list = new_expr_list();
-    for (int i = 0; i < stmt->select_list->count; i++) {
-        collect_aggregates(expr_list, &stmt->select_list->data[i]);
-    }
-    if (expr_list->count > 0) {
+
+    if (query_has_aggregates) {
         fprintf(stderr, "Plan contains aggregates.\n");
-        plan = make_aggregate(plan, expr_list);
+        plan = make_aggregate(plan, aggregate_exprs);
     }
     fprintf(stderr, "build_plan: aggregates collected:\n");
 
     fprintf(stderr, "build_plan: make projection:\n");
-    plan = make_projection(plan, pager, stmt);
+    struct SizeTVec *indexes = get_projection_indexes(resolver, stmt);
+    plan = make_projection(plan, indexes);
     fprintf(stderr, "build_plan: projection made:\n");
     return plan;
 }

@@ -10,7 +10,6 @@ static struct Filter {
     struct Plan     base;
     struct Plan     *child;
     struct ExprList *predicates;
-    struct Columns  *columns;
 };
 
 static bool value_is_equal(struct Value *left, struct Value *right) {
@@ -99,7 +98,7 @@ static bool value_is_greater(struct Value *left, struct Value *right) {
     }
 }
 
-static struct Value expr_to_value(struct Expr *expr, struct Row *row, struct Columns *columns) {
+static struct Value expr_to_value(struct Expr *expr, struct Row *row) {
     struct Value value;
 
     switch (expr->type) {
@@ -116,28 +115,7 @@ static struct Value expr_to_value(struct Expr *expr, struct Row *row, struct Col
             break;
 
         case EXPR_COLUMN: {
-            bool found = false;
-            for (int i = 0; i < columns->count; i++) {
-                struct Column column = columns->data[i];
-                if (!unterminated_string_equals(&expr->column.name, &column.name)) {
-                    continue;
-                }
-
-                found = true;
-                uint32_t index = column.index;
-                if (index >= row->column_count) {
-                    fprintf(stderr, "expr_to_value: Index %d out of bounds %d.\n", index, row->column_count);
-                    print_row_to_stderr(row);
-                    exit(1);
-                }
-                value = row->values[index];
-                break;
-            }
-
-            if (!found) {
-                fprintf(stderr, "expr_to_value: Could not find column %*s.\n", expr->column.name.len, expr->column.name.start);
-                exit(1);
-            }
+            value = row->values[expr->column.idx];
             break;
 
         default:
@@ -149,15 +127,15 @@ static struct Value expr_to_value(struct Expr *expr, struct Row *row, struct Col
     return value;
 }
 
-static bool evaluate_predicate(struct Expr *predicate, struct Row *row, struct Columns *columns) {
+static bool evaluate_predicate(struct Expr *predicate, struct Row *row) {
 
     if (predicate->type != EXPR_BINARY) {
         fprintf(stderr, "Currently only binary predicates are supported.\n");
         exit(1);
     }
 
-    struct Value left_value     = expr_to_value(predicate->binary.left, row, columns);
-    struct Value right_value    = expr_to_value(predicate->binary.right, row, columns);
+    struct Value left_value     = expr_to_value(predicate->binary.left, row);
+    struct Value right_value    = expr_to_value(predicate->binary.right, row);
 
     if (left_value.type != right_value.type) {
         // fprintf(stderr, "evaluate_predicate: mismatched types %d, %d.\n", left_value.type, right_value.type);
@@ -189,7 +167,7 @@ static bool evaluate_predicate(struct Expr *predicate, struct Row *row, struct C
 }
 
 
-static struct Plan *make_filter(struct Plan *plan, struct ExprList *predicates, struct Columns *columns) {
+static struct Plan *make_filter(struct Plan *plan, struct ExprList *predicates) {
     struct Filter *filter = malloc(sizeof(struct Filter));
     if (!filter) {
         fprintf(stderr, "make_filter: *filter malloc failed\n");
@@ -199,7 +177,6 @@ static struct Plan *make_filter(struct Plan *plan, struct ExprList *predicates, 
     memset(filter, 0, sizeof *filter);
     filter->base.type           = PLAN_FILTER;
     filter->predicates          = predicates;
-    filter->columns             = columns;
     filter->child               = plan;
     return &filter->base;
 }
@@ -214,7 +191,7 @@ static bool filter_next(struct Pager *pager, struct Filter *filter, struct Row *
         for (int i = 0; i < filter->predicates->count; i++) {
 
             struct Expr *predicate = &filter->predicates->data[i];
-            if (!evaluate_predicate(predicate, row, filter->columns)) {
+            if (!evaluate_predicate(predicate, row)) {
                 predicate_success = false;
                 break;
             }
