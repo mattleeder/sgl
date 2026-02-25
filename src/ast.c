@@ -184,14 +184,7 @@ struct HashMap *get_columns_from_expression_list(struct ExprList *expr_list) {
 }
 
 struct IndexComparisonArray *get_index_comparisons(struct ExprList *expr_list) {
-    struct IndexComparisonArray *array = malloc(sizeof(struct IndexComparisonArray));
-    
-    if (!array) {
-        fprintf(stderr, "get_column_index_comparisons: failed to malloc *array.\n");
-        exit(1);
-    }
-
-    init_index_comparison_array(array);
+    struct IndexComparisonArray *array = vector_index_comparison_array_new();
 
     struct Expr *expr;
     for (int i = 0; i < expr_list->count; i++) {
@@ -214,7 +207,7 @@ struct IndexComparisonArray *get_index_comparisons(struct ExprList *expr_list) {
         }
 
         struct IndexComparison comparison = { .binary = expr->binary, .columns = columns };
-        push_index_comparison_array(array, comparison);
+        vector_index_comparison_array_push(array, comparison);
     }
 
     return array;

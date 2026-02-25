@@ -60,7 +60,7 @@ static void collect_aggregates(struct ExprList *expr_list, struct Expr *expr) {
     }
 
     if (expr->type == EXPR_FUNCTION && is_aggregate_function(expr->function.name)) {
-        push_expr_list(expr_list, *expr);
+        vector_expr_list_push(expr_list, *expr);
     }
 }
 
@@ -70,7 +70,7 @@ struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt) {
     assert(stmt->select_list);
 
     fprintf(stderr, "Building plan\n");
-    struct ExprList *aggregate_exprs = new_expr_list();
+    struct ExprList *aggregate_exprs = vector_expr_list_new();
     for (int i = 0; i < stmt->select_list->count; i++) {
         fprintf(stderr, "loop\n");
         collect_aggregates(aggregate_exprs, &stmt->select_list->data[i]);

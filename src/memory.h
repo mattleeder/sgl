@@ -43,18 +43,30 @@ struct name_pascal {                                                            
     type    *data;                                                                              \
 };                                                                                              \
                                                                                                 \
-static void init_##name_snake(struct name_pascal *v) {                                          \
+static void vector_##name_snake##_init(struct name_pascal *v) {                                   \
     v->count    = 0;                                                                            \
     v->capacity = 0;                                                                            \
     v->data     = NULL;                                                                         \
 }                                                                                               \
                                                                                                 \
-static void free_##name_snake(struct name_pascal *v) {                                          \
-    free(v->data);                                                                              \
-    init_##name_snake(v);                                                                       \
+static struct name_pascal *vector_##name_snake##_new() {                                          \
+                                                                                                \
+    struct name_pascal *vector = malloc(sizeof(type));                                          \
+    if (!vector) {                                                                              \
+        fprintf(stderr, "init_" #name_snake ": failed to malloc *vector\n");                    \
+        exit(1);                                                                                \
+    }                                                                                           \
+                                                                                                \
+    vector_##name_snake##_init(vector);                                                                  \
+    return vector;                                                                              \
 }                                                                                               \
                                                                                                 \
-static void push_##name_snake(struct name_pascal *v, type value) {                              \
+static void vector_##name_snake##_free(struct name_pascal *v) {                                   \
+    free(v->data);                                                                              \
+    vector_##name_snake##_init(v);                                                                       \
+}                                                                                               \
+                                                                                                \
+static void vector_##name_snake##_push(struct name_pascal *v, type value) {                       \
     if (v == NULL) {                                                                            \
         fprintf(stderr, "push_" #name_snake ": Writing to NULL  " #name_snake " pointer.\n");   \
         exit(1);                                                                                \

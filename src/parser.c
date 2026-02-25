@@ -22,16 +22,6 @@ static char *get_token_string(struct Token *token) {
     return buffer;
 }
 
-struct ExprList *new_expr_list() {
-    struct ExprList *expr_list = malloc(sizeof(struct ExprList));
-    if (!expr_list) {
-        fprintf(stderr, "new_expr_list: *expr_list malloc failed\n");
-        exit(1);
-    }
-    init_expr_list(expr_list);
-    return expr_list;
-}
-
 static struct Expr *new_expr(enum ExprType type) {
     struct Expr *expr = malloc(sizeof(struct Expr));
     if (!expr) {
@@ -213,11 +203,11 @@ static struct Expr *parse_expression(struct Parser *parser, struct Scanner *scan
 }
 
 static struct ExprList *parse_expression_list(struct Parser *parser, struct Scanner *scanner) {
-    struct ExprList *expr_list = new_expr_list();
+    struct ExprList *expr_list = vector_expr_list_new();
 
     while (true) {
         struct Expr *expr = parse_expression(parser, scanner);
-        push_expr_list(expr_list, *expr);
+        vector_expr_list_push(expr_list, *expr);
 
         
         if (parser->current.type != TOKEN_COMMA) {
@@ -268,15 +258,9 @@ struct SelectStatement *parse(struct Parser *parser, const char *source, struct 
 
 struct Columns *parse_create(struct Parser *parser, const char *source, struct TriePool *reserved_words_pool) {
     fprintf(stderr, "%s\n", source);
-    struct Columns *columns = malloc(sizeof(struct Columns));
-    if (!columns) {
-        fprintf(stderr, "parse_create: *columns malloc failed\n");
-        exit(1);
-    }
+    struct Columns *columns = vector_columns_new();
 
     struct Scanner scanner;
-
-    init_columns(columns);
 
     init_scanner(&scanner, source, reserved_words_pool);
 
@@ -298,7 +282,7 @@ struct Columns *parse_create(struct Parser *parser, const char *source, struct T
         }
         
         struct Column column = { .index = index, .name = { .start = parser->current.start, .len = parser->current.length } };
-        push_columns(columns, column);
+        vector_columns_push(columns, column);
         index++;
         
         advance(parser, &scanner);
@@ -316,13 +300,7 @@ struct Columns *parse_create(struct Parser *parser, const char *source, struct T
 }
 
 static struct Columns *parse_indexed_column(struct Parser *parser, struct Scanner *scanner) {
-    struct Columns *columns = malloc(sizeof(struct Columns));
-    if (!columns) {
-        fprintf(stderr, "parse_indexed_column: *columns malloc failed\n");
-        exit(1);
-    }
-
-    init_columns(columns);
+    struct Columns *columns = vector_columns_new();
     fprintf(stderr, "Columns capacity: %zu\n", columns->capacity);
 
     if (parser->current.type != TOKEN_IDENTIFIER) {
@@ -332,7 +310,7 @@ static struct Columns *parse_indexed_column(struct Parser *parser, struct Scanne
 
     // @TODO: .index = 0?
     struct Column column = { .index = 0, .name = { .start = parser->current.start, .len = parser->current.length } };
-    push_columns(columns, column);
+    vector_columns_push(columns, column);
     advance(parser, scanner);
 
     while (parser->current.type == TOKEN_DOT) {
@@ -346,7 +324,7 @@ static struct Columns *parse_indexed_column(struct Parser *parser, struct Scanne
         column.name.start   = parser->current.start;
         column.name.len     = parser->current.length;
 
-        push_columns(columns, column);
+        vector_columns_push(columns, column);
         advance(parser, scanner);
     }
 

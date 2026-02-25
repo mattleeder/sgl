@@ -55,7 +55,7 @@ static struct HashMap *get_full_row_col_to_idx_hash_map(struct Pager *pager, str
     // Will iterate through tables when there are multiple
     struct Columns *columns = load_table_columns(pager, stmt->from_table);
     add_table_to_hash_map(column_to_index, columns, 0);
-    // free_columns(columns);
+    // vector_columns_free(columns);
 
     return column_to_index;
 }
@@ -170,13 +170,7 @@ struct Resolver *resolver_init(struct Resolver *resolver, struct Pager *pager, s
 
 struct SizeTVec *get_projection_indexes(struct Resolver *resolver, struct SelectStatement *stmt) {
     struct HashMap *hash_map = resolver->query_has_aggregates ? resolver->post_agg_row_col_to_idx : resolver->full_row_col_to_idx;
-    struct SizeTVec *indexes = malloc(sizeof(struct SizeTVec));
-    if (!indexes) {
-        fprintf(stderr, "get_projection_indexes: failed to malloc *indexes.\n");
-        exit(1);
-    }
-
-    init_size_t_vec(indexes);
+    struct SizeTVec *indexes = vector_size_t_new();
 
     // @TODO: currently only handling column expr
     for (size_t i = 0; stmt->select_list->count; i++) {
@@ -189,7 +183,7 @@ struct SizeTVec *get_projection_indexes(struct Resolver *resolver, struct Select
         size_t idx = hash_map_column_to_index_get(hash_map, &column);
 
         fprintf(stderr, "pushing %zu\n", idx);
-        push_size_t_vec(indexes, idx);
+        vector_size_t_push(indexes, idx);
     }
 
     return indexes;

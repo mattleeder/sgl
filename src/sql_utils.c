@@ -91,7 +91,7 @@ uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_
         struct CreateIndexStatement *stmt = parse_create_index(&parser_create_index, schema_record.body.sql, pool);
 
         if(stmt->indexed_columns->count != 1) {
-            free_columns(stmt->indexed_columns);
+            vector_columns_free(stmt->indexed_columns);
             free(stmt);
             continue;
         }
@@ -99,12 +99,12 @@ uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_
         struct Column first_column = stmt->indexed_columns->data[0];
 
         if (!unterminated_string_equals(&first_column.name, column_name)) {
-            free_columns(stmt->indexed_columns);
+            vector_columns_free(stmt->indexed_columns);
             free(stmt);
             continue;
         }
 
-        free_columns(stmt->indexed_columns);
+        vector_columns_free(stmt->indexed_columns);
         free(stmt);
 
         return schema_record.body.root_page;
@@ -114,13 +114,7 @@ uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_
 }
 
 struct IndexColumnsArray *get_all_indexes_for_table(struct Pager *pager, char* table_name) {
-    struct IndexColumnsArray *index_array = malloc(sizeof(struct IndexColumnsArray));
-    if (!index_array) {
-        fprintf(stderr, "get_all_indexes_for_table: failed to malloc *index_array.\n");
-        exit(1);
-    }
-
-    init_index_columns_array(index_array);
+    struct IndexColumnsArray *index_array = vector_index_columns_array_new();
 
     struct PageHeader page_header;
     uint16_t *cell_offsets = read_page_header_and_cell_pointer_array(pager, &page_header, 1);
@@ -148,7 +142,7 @@ struct IndexColumnsArray *get_all_indexes_for_table(struct Pager *pager, char* t
 
         struct IndexColumns index_column = { .root_page = record.body.root_page, .columns = stmt->indexed_columns };
 
-        push_index_columns_array(index_array, index_column);
+        vector_index_columns_array_push(index_array, index_column);
     }
 
     free(cell_offsets);

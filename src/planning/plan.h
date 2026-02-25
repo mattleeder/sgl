@@ -6,7 +6,7 @@
 #include "../ast.h"
 #include "../data_parsing/row_parsing.h"
 
-DEFINE_VECTOR(size_t, SizeTVec, size_t_vec)
+DEFINE_VECTOR(size_t, SizeTVec, size_t)
 
 enum PlanType {
     PLAN_TABLE_SCAN,

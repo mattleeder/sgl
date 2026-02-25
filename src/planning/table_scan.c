@@ -48,14 +48,7 @@ static struct BinaryExprList *collect_index_predicates(struct IndexData *index_d
         return NULL;
     }
 
-    struct BinaryExprList *expr_list = malloc(sizeof(struct BinaryExprList));
-
-    if (!expr_list) {
-        fprintf(stderr, "collect_index_predicates: failed to malloc *expr_list.\n");
-        exit(1);
-    }
-
-    init_binary_expr_list(expr_list);
+    struct BinaryExprList *expr_list = vector_binary_expr_list_new();
 
     struct HashMap *hash_map = get_hash_map_from_columns_array(index_data->columns);
 
@@ -93,7 +86,7 @@ static struct BinaryExprList *collect_index_predicates(struct IndexData *index_d
 
         if (index_contains_all_columns) {
             fprintf(stderr, "Pushing\n");
-            push_binary_expr_list(expr_list, expr->binary);
+            vector_binary_expr_list_push(expr_list, expr->binary);
             fprintf(stderr, "Count is now %zu\n", expr_list->count);
         }
 
@@ -168,7 +161,7 @@ static struct IndexData *get_best_index(struct Pager *pager, struct SelectStatem
     }
 
     hash_map_column_to_bool_free(column_hash_map);
-    free_index_columns_array(index_array);
+    vector_index_columns_array_free(index_array);
 
     if (best_index->root_page == 0) {   
         fprintf(stderr, "Could not find suitable index.\n");

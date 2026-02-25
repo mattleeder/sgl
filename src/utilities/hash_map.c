@@ -29,9 +29,6 @@ void hash_map_init(struct HashMap *hash_map,
     assert(load_factor > 0);
     assert(load_factor <= 1.00);
 
-    fprintf(stderr, "hash_map_init: key_size: %zu\n", key_size);
-    fprintf(stderr, "hash_map_init: value_size: %zu\n", value_size);
-
     hash_map->data              = buckets;
 
     hash_map->hash_function     = hash_function;
