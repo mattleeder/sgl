@@ -16,7 +16,6 @@ struct MemVec {
 };
 
 static inline size_t grow_capacity(size_t capacity) {
-    size_t new_capacity = 0;
     if (capacity < MIN_CAPACITY) return MIN_CAPACITY;
     if (capacity > SIZE_MAX / 2) return SIZE_MAX;
     return capacity * 2;
@@ -43,15 +42,15 @@ struct name_pascal {                                                            
     type    *data;                                                                              \
 };                                                                                              \
                                                                                                 \
-static void vector_##name_snake##_init(struct name_pascal *v) {                                   \
+static inline void vector_##name_snake##_init(struct name_pascal *v) {                                   \
     v->count    = 0;                                                                            \
     v->capacity = 0;                                                                            \
     v->data     = NULL;                                                                         \
 }                                                                                               \
                                                                                                 \
-static struct name_pascal *vector_##name_snake##_new() {                                          \
+static inline struct name_pascal *vector_##name_snake##_new() {                                          \
                                                                                                 \
-    struct name_pascal *vector = malloc(sizeof(type));                                          \
+    struct name_pascal *vector = malloc(sizeof(struct name_pascal));                                          \
     if (!vector) {                                                                              \
         fprintf(stderr, "init_" #name_snake ": failed to malloc *vector\n");                    \
         exit(1);                                                                                \
@@ -61,12 +60,12 @@ static struct name_pascal *vector_##name_snake##_new() {                        
     return vector;                                                                              \
 }                                                                                               \
                                                                                                 \
-static void vector_##name_snake##_free(struct name_pascal *v) {                                   \
+static inline void vector_##name_snake##_free(struct name_pascal *v) {                                   \
     free(v->data);                                                                              \
     vector_##name_snake##_init(v);                                                                       \
 }                                                                                               \
                                                                                                 \
-static void vector_##name_snake##_push(struct name_pascal *v, type value) {                       \
+static inline void vector_##name_snake##_push(struct name_pascal *v, type value) {                       \
     if (v == NULL) {                                                                            \
         fprintf(stderr, "push_" #name_snake ": Writing to NULL  " #name_snake " pointer.\n");   \
         exit(1);                                                                                \

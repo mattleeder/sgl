@@ -1,5 +1,5 @@
 #ifndef sql_parser
-#define sql_parse
+#define sql_parser
 
 #include "ast.h"
 #include "lexer.h"
@@ -12,10 +12,6 @@ struct Parser {
     bool            had_error;
     bool            panic_mode;
 };
-
-struct ExprList *new_expr_list();
-
-static struct ExprList *parse_expression_list(struct Parser *parser, struct Scanner *scanner);
 
 struct SelectStatement *parse(struct Parser *parser, const char *source, struct TriePool *reserved_words_pool);
 struct Columns *parse_create(struct Parser *parser, const char *source, struct TriePool *reserved_words_pool);

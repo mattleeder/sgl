@@ -12,13 +12,15 @@
 #include "sql_utils.h"
 #include "memory.h"
 
+static struct ExprList *parse_expression_list(struct Parser *parser, struct Scanner *scanner);
+
 static char *get_token_string(struct Token *token) {
     char *buffer = malloc(token->length + 1);
     if (!buffer) {
         fprintf(stderr, "get_token_string: *buffer malloc failed\n");
         exit(1);
     }
-    sprintf(buffer, "%.*s\0", token->length, token->start);
+    sprintf(buffer, "%.*s", token->length, token->start);
     return buffer;
 }
 
@@ -167,6 +169,8 @@ static struct Expr *parse_term(struct Parser *parser, struct Scanner *scanner) {
         default:
             error_at_current(parser, "Expected expression.");
     }
+
+    return NULL;
 }
 
 static struct Expr *parse_expression(struct Parser *parser, struct Scanner *scanner) {
@@ -406,7 +410,7 @@ struct CreateIndexStatement *parse_create_index(struct Parser *parser, const cha
     consume(parser, &scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
 
     fprintf(stderr, "\nIndex has columns: \n");
-    for (int i = 0; i < stmt->indexed_columns->count; i++) {
+    for (size_t i = 0; i < stmt->indexed_columns->count; i++) {
         struct Column column =  stmt->indexed_columns->data[i];
         print_unterminated_string_to_stderr(&column.name);
     }

@@ -1,19 +1,13 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include "projection.h"
 #include "../ast.h"
 #include "../sql_utils.h"
 #include "plan.h"
 #include "../data_parsing/row_parsing.h"
 
-struct Projection {
-    struct Plan     base;
-    struct Plan     *child;
-    struct SizeTVec *column_indexes;
-    bool            first_col_is_rowid;
-};
-
-static struct Plan *make_projection(struct Plan *plan, struct SizeTVec *indexes, bool first_col_is_rowid) {
+struct Plan *make_projection(struct Plan *plan, struct SizeTVec *indexes, bool first_col_is_rowid) {
     struct Projection *projection = malloc(sizeof(struct Projection));
     if (!projection) {
         fprintf(stderr, "make_projection: *projection malloc failed\n");
@@ -30,7 +24,7 @@ static struct Plan *make_projection(struct Plan *plan, struct SizeTVec *indexes,
     return &projection->base;
 }
 
-static bool projection_next(struct Pager *pager, struct Projection *projection, struct Row *row) {
+bool projection_next(struct Pager *pager, struct Projection *projection, struct Row *row) {
     // Only write selected columns into output
     if (!plan_next(pager, projection->child, row)) {
         return false;

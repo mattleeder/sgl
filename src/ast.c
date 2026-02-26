@@ -17,14 +17,14 @@ void print_expr_column_to_stderr(struct ExprColumn *column, int padding) {
     assert(column != NULL);
 
     fprintf(stderr, "%*sColumn\n", padding, "");
-    fprintf(stderr, "%*sName: %.*s\n", padding + 4, "", column->name.len, column->name.start);
+    fprintf(stderr, "%*sName: %.*s\n", padding + 4, "", (int)column->name.len, column->name.start);
 }
 
 void print_expr_function_to_stderr(struct ExprFunction *function, int padding) {
     assert(function != NULL);
 
     fprintf(stderr, "%*sFunction\n", padding, "");
-    fprintf(stderr, "%*sName: %.*s\n", padding + 4, "", function->name);
+    fprintf(stderr, "%*sName: %s\n", padding + 4, "", function->name);
     print_expression_list_to_stderr(function->args, padding + 4);
 }
 
@@ -84,8 +84,8 @@ void print_expression_list_to_stderr(struct ExprList *expr_list, int padding) {
         exit(1);
     }
 
-    fprintf(stderr, "%*sExpressionList: %lld expressions\n", padding, "", expr_list->count);
-    for (int i = 0; i < expr_list->count; i++) {
+    fprintf(stderr, "%*sExpressionList: %zu expressions\n", padding, "", expr_list->count);
+    for (size_t i = 0; i < expr_list->count; i++) {
         print_expression_to_stderr(&expr_list->data[i], padding + 4);
     }
 }
@@ -175,7 +175,7 @@ struct HashMap *get_columns_from_expression_list(struct ExprList *expr_list) {
     );
 
     struct Expr *expr;
-    for (int i = 0; i < expr_list->count; i++) {
+    for (size_t i = 0; i < expr_list->count; i++) {
         expr = &expr_list->data[i];
         get_column_from_expression(expr, columns);
     }
@@ -187,7 +187,7 @@ struct IndexComparisonArray *get_index_comparisons(struct ExprList *expr_list) {
     struct IndexComparisonArray *array = vector_index_comparison_array_new();
 
     struct Expr *expr;
-    for (int i = 0; i < expr_list->count; i++) {
+    for (size_t i = 0; i < expr_list->count; i++) {
         expr = &expr_list->data[i];
         
         if (expr->type != EXPR_BINARY) {

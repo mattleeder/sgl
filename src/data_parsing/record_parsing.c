@@ -58,7 +58,7 @@ static struct PayloadInfo get_payload_info_from_cell(struct Cell *cell) {
 }
 
 // @TODO: make use of overflow page struct
-static void read_payload_overflow(struct Pager *pager, struct PayloadInfo *payload_info, uint8_t *local_payload, uint8_t *data_buffer) {
+static void read_payload_overflow(struct Pager *pager, struct PayloadInfo *payload_info, uint8_t *data_buffer) {
     uint64_t bytes_read     = payload_info->local_bytes;
     uint32_t overflow_page  = payload_info->overflow_page;
     uint64_t usable_size    = pager->page_size - pager->database_header->reserved_space;
@@ -95,7 +95,7 @@ static struct PayloadBuffer read_full_payload(struct Pager *pager, struct Cell *
     memcpy(payload_buffer.data, data, payload_info.payload_size);
     
     if (payload_info.overflow_page != 0) {
-        read_payload_overflow(pager, &payload_info, data, payload_buffer.data);
+        read_payload_overflow(pager, &payload_info, payload_buffer.data);
     }
 
     pager_release_page(page);
@@ -164,14 +164,14 @@ static struct ContentType serial_type_to_content_type(uint64_t serial_type) {
         break;
 
         case 10:                // Reserved for internal use. These serial type codes will never appear in a well-formed database file, but they might be used in transient and temporary database files that SQLite sometimes generates for its own use. The meanings of these codes can shift from one release of SQLite to the next.
-        fprintf(stderr, "Invalid serial type %lld\n", serial_type);
+        fprintf(stderr, "Invalid serial type %zu\n", serial_type);
         exit(1);
         content_type.type_name      = SQL_INVALID;
         content_type.content_size   = 0;
         break;
 
         case 11:                // See 10.
-        fprintf(stderr, "Invalid serial type %lld\n", serial_type);
+        fprintf(stderr, "Invalid serial type %zu\n", serial_type);
         exit(1);
         content_type.type_name      = SQL_INVALID;
         content_type.content_size   = 0;
@@ -192,7 +192,7 @@ static struct ContentType serial_type_to_content_type(uint64_t serial_type) {
 }
 
 // @TODO: maybe its better to pass payload info as an arg, will need to pass page_number too tho
-static void read_record_header(struct Pager *pager, struct Cell *cell, struct RecordHeader *record_header, struct PayloadBuffer *payload_buffer) {
+static void read_record_header(struct RecordHeader *record_header, struct PayloadBuffer *payload_buffer) {
     uint8_t *data = payload_buffer->data;
     
     uint64_t row_size = 0;
@@ -224,12 +224,12 @@ static void read_record_header(struct Pager *pager, struct Cell *cell, struct Re
 
     if (bytes_read != record_header->header_size) {
         fprintf(stderr, "Read %lld columns\n", column_number);
-        fprintf(stderr, "read_record_header: Header size %d does not match bytes read %lld\n", record_header->header_size, bytes_read);
+        fprintf(stderr, "read_record_header: Header size %lld does not match bytes read %lld\n", record_header->header_size, bytes_read);
         exit(1);
     }
 }
 
-static void read_record_body(struct Pager *pager, struct Cell *cell, struct RecordBody *record_body, struct RecordHeader *record_header, struct PayloadBuffer *payload_buffer) {
+static void read_record_body(struct RecordBody *record_body, struct RecordHeader *record_header, struct PayloadBuffer *payload_buffer) {
     // @TODO: maybe its better to pass payload info as an arg, will need to pass page_number too tho
 
     uint8_t *data = payload_buffer->data + record_header->header_size;
@@ -252,7 +252,7 @@ static void read_record_body(struct Pager *pager, struct Cell *cell, struct Reco
     record_body->column_pointers    = column_pointers;
 
     uint64_t column_size = 0;
-    for (int i = 0; i < record_header->number_of_columns; i++) {
+    for (uint64_t i = 0; i < record_header->number_of_columns; i++) {
         column_size = record_header->columns[i].content_size;
         column_pointers[i] = record_block;
 
@@ -286,8 +286,8 @@ void free_record(struct Record *record) {
 
 static void read_record(struct Pager *pager, struct Cell *cell, struct Record *record) {
     struct PayloadBuffer payload_buffer = read_full_payload(pager, cell);
-    read_record_header(pager, cell, &record->header, &payload_buffer);
-    read_record_body(pager, cell, &record->body, &record->header, &payload_buffer);
+    read_record_header(&record->header, &payload_buffer);
+    read_record_body(&record->body, &record->header, &payload_buffer);
     free_payload_buffer(&payload_buffer);
 }
 
@@ -307,7 +307,7 @@ static void interpret_record_body_as_schema_record_body(struct RecordBody *recor
     schema_record_body->schema_type         = record_body->column_pointers[0];
     schema_record_body->schema_name         = record_body->column_pointers[1];
     schema_record_body->table_name          = record_body->column_pointers[2];
-    schema_record_body->root_page_bytes     = record_body->column_pointers[3];
+    schema_record_body->root_page_bytes     = (uint8_t *)record_body->column_pointers[3];
     schema_record_body->sql                 = record_body->column_pointers[4];
     schema_record_body->data_block          = record_body->data_block;
     schema_record_body->root_page           = read_root_page(schema_record_body->root_page_bytes, schema_record_header->root_page.content_size);

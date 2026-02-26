@@ -29,8 +29,8 @@ struct Index {
     // Condition
 };
 
-static bool expr_contains_aggregate(struct Expr *expr);
-static bool expr_list_contains_aggregate(struct ExprList *expr_list);
+bool expr_contains_aggregate(struct Expr *expr);
+bool expr_list_contains_aggregate(struct ExprList *expr_list);
 bool plan_next(struct Pager *pager, struct Plan *plan, struct Row *row);
 
 struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt);

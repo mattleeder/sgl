@@ -156,7 +156,7 @@ void interior_table_step(struct SubWalker *walker, struct SubWalkerList *list, s
                
         cell_offset = walker->cell_pointer_array[mid];
         read_cell(walker->pager, walker->page_header, walker->cell, cell_offset);
-        // fprintf(stderr, "lo: %d, hi: %d, mid: %d, integer key:%lld\n", lo, hi, mid, walker->cell->data.table_interior_cell.integer_key);
+        // fprintf(stderr, "lo: %d, hi: %d, mid: %d, integer key:%zu\n", lo, hi, mid, walker->cell->data.table_interior_cell.integer_key);
 
         if (walker->cell->data.table_interior_cell.integer_key >= *next_rowid) {
             // Record
@@ -224,7 +224,7 @@ void leaf_table_step(struct SubWalker *walker, struct SubWalkerList *list, struc
                 
         cell_offset = walker->cell_pointer_array[mid];
         read_cell(walker->pager, walker->page_header, walker->cell, cell_offset);
-        // fprintf(stderr, "lo: %d, hi: %d, mid: %d, rowid: %lld\n", lo, hi, mid, walker->cell->data.table_leaf_cell.row_id);
+        // fprintf(stderr, "lo: %d, hi: %d, mid: %d, rowid: %zu\n", lo, hi, mid, walker->cell->data.table_leaf_cell.row_id);
 
         if (walker->cell->data.table_leaf_cell.row_id == *next_rowid) {
             // Return this row
@@ -335,7 +335,7 @@ void leaf_index_step(struct SubWalker *walker, struct SubWalkerList *list, struc
         read_cell_offset_into_row(walker->pager, &index_row, walker->page_header, walker->cell_pointer_array[mid]);
 
         if (index_row.column_count < 1) {
-            fprintf(stderr, "leaf_index_step: Expected row to have at least 1 column but has %lld\n", row->column_count);
+            fprintf(stderr, "leaf_index_step: Expected row to have at least 1 column but has %zu\n", row->column_count);
             exit(1);
         }
         
@@ -369,7 +369,7 @@ void leaf_index_step(struct SubWalker *walker, struct SubWalkerList *list, struc
         exit(1);
     }
 
-    // fprintf(stderr, "Writing %lld to next_rowid\n", row_value.int_value.value);
+    // fprintf(stderr, "Writing %zu to next_rowid\n", row_value.int_value.value);
     *next_rowid = row_value.int_value.value;
     *rowid_valid = true;
 }
@@ -483,7 +483,6 @@ bool produce_rowid(struct TreeWalker *walker, struct Row *row, uint64_t *next_ro
 
 bool produce_row(struct TreeWalker *walker, struct Row *row) {
     uint64_t next_rowid = walker->current_rowid;
-    bool rowid_valid = false;
 
     fprintf(stderr, "Find rowid\n");
     if (walker->index_list != NULL) {
@@ -497,9 +496,9 @@ bool produce_row(struct TreeWalker *walker, struct Row *row) {
         }
     }
 
-    fprintf(stderr, "Next rowid: %lld, current rowid: %lld\n", next_rowid, walker->current_rowid);
+    fprintf(stderr, "Next rowid: %zu, current rowid: %zu\n", next_rowid, walker->current_rowid);
     if (next_rowid < walker->current_rowid) {
-        fprintf(stderr, "Next rowid: %lld is less than current rowid %lld.\n", next_rowid, walker->current_rowid);
+        fprintf(stderr, "Next rowid: %zu is less than current rowid %zu.\n", next_rowid, walker->current_rowid);
         return false;
     }
     walker->current_rowid = next_rowid;
@@ -509,7 +508,7 @@ bool produce_row(struct TreeWalker *walker, struct Row *row) {
         return false;
     }
 
-    fprintf(stderr, "Search in table tree for rowid: %lld\n", next_rowid);
+    fprintf(stderr, "Search in table tree for rowid: %zu\n", next_rowid);
     bool row_valid = false;
     while (walker->table_list->count > 0) {
         struct SubWalker *last_sub_walker = walker->table_list->data[walker->table_list->count - 1];

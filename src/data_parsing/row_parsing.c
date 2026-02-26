@@ -12,7 +12,7 @@ void free_row(struct Row *row) {
     free(row->values);
 }
 
-static void decode_column(uint8_t *data, struct ContentType type, struct Value *value) {
+static void decode_column(const uint8_t *data, struct ContentType type, struct Value *value) {
 
     switch (type.type_name) {
 
@@ -101,7 +101,7 @@ void read_row_from_record(struct Record *record, struct Row *row, struct Cell *c
     }
 
 
-    for (int i = 0; i < record->header.number_of_columns; i++) {
+    for (uint64_t i = 0; i < record->header.number_of_columns; i++) {
         decode_column(record->body.column_pointers[i], record->header.columns[i], &row->values[i]);
     }
 
@@ -150,7 +150,7 @@ void print_value(struct Value *value) {
             break;
 
         case VALUE_INT:
-            printf("%lld", value->int_value.value);
+            printf("%zu", value->int_value.value);
             break;
 
         case VALUE_FLOAT:
@@ -180,7 +180,7 @@ void print_value_to_stderr(struct Value *value) {
             break;
 
         case VALUE_INT:
-            fprintf(stderr, "%lld", value->int_value.value);
+            fprintf(stderr, "%zu", value->int_value.value);
             break;
 
         case VALUE_FLOAT:
@@ -198,7 +198,7 @@ void print_value_to_stderr(struct Value *value) {
 }
 
 void print_row(struct Row *row) {
-    for (int i = 0; i < row->column_count; i++) {
+    for (uint64_t i = 0; i < row->column_count; i++) {
         if (i > 0) {
             printf("|");
         }
@@ -215,9 +215,9 @@ void print_row_to_stderr(struct Row *row) {
         exit(1);
     }
 
-    fprintf(stderr, "%d", row->rowid);
+    fprintf(stderr, "%lld", row->rowid);
 
-    for (int i = 0; i < row->column_count; i++) {
+    for (uint64_t i = 0; i < row->column_count; i++) {
         fprintf(stderr, "|");
         print_value_to_stderr(&row->values[i]);
     }

@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "table_scan.h"
 #include "../ast.h"
 #include "../sql_utils.h"
 #include "../data_parsing/page_parsing.h"
@@ -13,17 +14,6 @@
 
 #define COLUMNS_IN_EXPR_HASH_MAP_MIN_SIZE 8
 
-struct TableScan {
-    struct Plan         base;
-    size_t              row_cursor;
-    uint32_t            root_page;
-    bool                first_col_is_row_id;
-    char                *table_name;
-    struct Columns      *columns;
-    struct TreeWalker   *walker;
-    struct IndexData    *index;
-};
-
 static struct HashMap *get_hash_map_from_columns_array(struct Columns *columns) {
     struct HashMap *hash_map = hash_map_column_to_bool_new(
         columns->count,
@@ -33,7 +23,7 @@ static struct HashMap *get_hash_map_from_columns_array(struct Columns *columns) 
     );
 
     bool set_value = true;
-    for (int i = 0; i < columns->count; i++) {
+    for (size_t i = 0; i < columns->count; i++) {
         const struct Column *column = &columns->data[i];
         print_unterminated_string_to_stderr(&column->name);
         hash_map_column_to_bool_set(hash_map, column, &set_value);
@@ -53,7 +43,7 @@ static struct BinaryExprList *collect_index_predicates(struct IndexData *index_d
     struct HashMap *hash_map = get_hash_map_from_columns_array(index_data->columns);
 
     struct Expr *expr;
-    for (int i = 0; i < stmt->where_list->count; i++) {
+    for (size_t i = 0; i < stmt->where_list->count; i++) {
         expr = &stmt->where_list->data[i];
         
         if (expr->type != EXPR_BINARY) {
@@ -74,7 +64,7 @@ static struct BinaryExprList *collect_index_predicates(struct IndexData *index_d
         struct Column *column;
 
         bool index_contains_all_columns = true;
-        for (int j = 0; j < columns_element_count; j++) {
+        for (size_t j = 0; j < columns_element_count; j++) {
             column = columns[j];
 
             if (!hash_map_column_to_bool_contains(hash_map, column)) {
@@ -110,7 +100,7 @@ static struct IndexData *get_best_index(struct Pager *pager, struct SelectStatem
     struct HashMap *column_hash_map = get_columns_from_expression_list(stmt->where_list);
     struct IndexColumnsArray *index_array = get_all_indexes_for_table(pager, stmt->from_table);
 
-    fprintf(stderr, "Found %d indexes\n", index_array->count);
+    fprintf(stderr, "Found %zu indexes\n", index_array->count);
 
     // Pick the index with the most matching columns
     struct IndexData *best_index = malloc(sizeof(struct IndexData));
@@ -133,13 +123,11 @@ static struct IndexData *get_best_index(struct Pager *pager, struct SelectStatem
     // Increment matching_columns_cur for every column it contains 
     // If the index has the most column matches it is the best index so far
     // Set matching_columns_max = matching_columns_cur
-    fprintf(stderr, "Searching\n");
-    for (int i = 0; i < index_array->count; i++) {
-        fprintf(stderr, "i: %d\n", i);
+    for (size_t i = 0; i < index_array->count; i++) {
         matching_columns_cur = 0;
         index_data = index_array->data[i];
 
-        for (int j = 0; j < index_data.columns->count; j++) {
+        for (size_t j = 0; j < index_data.columns->count; j++) {
             index_column = index_data.columns->data[j];
 
             if (!hash_map_column_to_bool_contains(column_hash_map, &index_column)) {
@@ -167,9 +155,9 @@ static struct IndexData *get_best_index(struct Pager *pager, struct SelectStatem
     }
 
     fprintf(stderr, "Best index columns: \n");
-    for (int i = 0; i < best_index->columns->count; i++) {
+    for (size_t i = 0; i < best_index->columns->count; i++) {
         index_column = best_index->columns->data[i];
-        fprintf(stderr, "Col %d: %.*s\n", i, index_column.name.len, index_column.name.start);
+        fprintf(stderr, "Col %zu: %.*s\n", i, (int)index_column.name.len, index_column.name.start);
     }
 
     // Fetch predicates using index columns
@@ -189,13 +177,13 @@ static struct IndexData *get_best_index(struct Pager *pager, struct SelectStatem
     // Select best index based on score
 }
 
-static bool table_scan_next(struct Pager *pager, struct TableScan *table_scan, struct Row *row) {
+bool table_scan_next(struct TableScan *table_scan, struct Row *row) {
     // Decode all columns of row into struct Row
     // fprintf(stderr, "table_scan_next\n");
     return produce_row(table_scan->walker, row);
 }
 
-static struct Plan *make_table_scan(struct Pager *pager, struct SelectStatement *stmt) {
+struct Plan *make_table_scan(struct Pager *pager, struct SelectStatement *stmt) {
     struct TableScan *table_scan = malloc(sizeof(struct TableScan));
     if (!table_scan) {
         fprintf(stderr, "make_table_scan: *table_scan malloc failed\n");

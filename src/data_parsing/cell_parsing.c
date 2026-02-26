@@ -77,13 +77,13 @@ static void read_table_leaf_cell(struct Pager *pager, const uint8_t *data, struc
 
     if (cell->data.table_leaf_cell.payload_info.local_bytes < cell->data.table_leaf_cell.payload_info.payload_size) {
         cell->data.table_leaf_cell.payload_info.overflow_page = read_u32_big_endian(data, bytes_read + cell->data.table_leaf_cell.payload_info.local_bytes);
-        fprintf(stderr, "Local bytes: %lld, Overflow page: %d\n", cell->data.table_leaf_cell.payload_info.local_bytes, cell->data.table_leaf_cell.payload_info.overflow_page);
+        fprintf(stderr, "Local bytes: %zu, Overflow page: %d\n", cell->data.table_leaf_cell.payload_info.local_bytes, cell->data.table_leaf_cell.payload_info.overflow_page);
     } else {
         cell->data.table_leaf_cell.payload_info.overflow_page = 0;
     }
 }
 
-static void read_table_interior_cell(struct Pager *pager, const uint8_t *data, struct Cell *cell) {
+static void read_table_interior_cell(const uint8_t *data, struct Cell *cell) {
     // Should only be called from read_cell
 
 
@@ -113,7 +113,7 @@ static void read_index_leaf_cell(struct Pager *pager, const uint8_t *data, struc
 
     if (cell->data.index_leaf_cell.payload_info.local_bytes < cell->data.index_leaf_cell.payload_info.payload_size) {
         cell->data.index_leaf_cell.payload_info.overflow_page = read_u32_big_endian(data, bytes_read + cell->data.index_leaf_cell.payload_info.local_bytes);
-        fprintf(stderr, "Local bytes: %lld, Overflow page: %d\n", cell->data.index_leaf_cell.payload_info.local_bytes, cell->data.index_leaf_cell.payload_info.overflow_page);
+        fprintf(stderr, "Local bytes: %zu, Overflow page: %d\n", cell->data.index_leaf_cell.payload_info.local_bytes, cell->data.index_leaf_cell.payload_info.overflow_page);
     } else {
         cell->data.index_leaf_cell.payload_info.overflow_page = 0;
     }
@@ -136,7 +136,7 @@ static void read_index_interior_cell(struct Pager *pager, const uint8_t *data, s
 
     if (cell->data.index_interior_cell.payload_info.local_bytes < cell->data.index_interior_cell.payload_info.payload_size) {
         cell->data.index_interior_cell.payload_info.overflow_page = read_u32_big_endian(data, bytes_read + cell->data.index_interior_cell.payload_info.local_bytes);
-        fprintf(stderr, "Local bytes: %lld, Overflow page: %d\n", cell->data.index_interior_cell.payload_info.local_bytes, cell->data.index_interior_cell.payload_info.overflow_page);
+        fprintf(stderr, "Local bytes: %zu, Overflow page: %d\n", cell->data.index_interior_cell.payload_info.local_bytes, cell->data.index_interior_cell.payload_info.overflow_page);
     } else {
         cell->data.index_interior_cell.payload_info.overflow_page = 0;
     }
@@ -156,7 +156,7 @@ void read_cell(struct Pager *pager, struct PageHeader *page_header, struct Cell 
 
         case PAGE_INTERIOR_TABLE:
             cell->type = TABLE_INTERIOR_CELL;
-            read_table_interior_cell(pager, data, cell);
+            read_table_interior_cell(data, cell);
             break;
 
         case PAGE_LEAF_INDEX:

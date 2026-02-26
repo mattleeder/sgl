@@ -10,16 +10,16 @@
 #include "../parser.h"
 
 #include "resolver.h"
-#include "projection.c"
-#include "aggregate.c"
-#include "filter.c"
-#include "table_scan.c"
+#include "projection.h"
+#include "aggregate.h"
+#include "filter.h"
+#include "table_scan.h"
 
 static bool is_aggregate_function(const char *function_name) {
     return strcmp(function_name, "count") == 0;
 }
 
-static bool expr_contains_aggregate(struct Expr *expr) {
+bool expr_contains_aggregate(struct Expr *expr) {
     if (!expr) {
         return false;
     }
@@ -42,10 +42,10 @@ static bool expr_contains_aggregate(struct Expr *expr) {
     }
 }
 
-static bool expr_list_contains_aggregate(struct ExprList *expr_list) {
+bool expr_list_contains_aggregate(struct ExprList *expr_list) {
     if (!expr_list) return false;
 
-    for (int i = 0; i < expr_list->count; i++) {
+    for (size_t i = 0; i < expr_list->count; i++) {
         if (expr_contains_aggregate(&expr_list->data[i])) {
             return true;
         }
@@ -71,7 +71,7 @@ struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt) {
 
     fprintf(stderr, "Building plan\n");
     struct ExprList *aggregate_exprs = vector_expr_list_new();
-    for (int i = 0; i < stmt->select_list->count; i++) {
+    for (size_t i = 0; i < stmt->select_list->count; i++) {
         collect_aggregates(aggregate_exprs, &stmt->select_list->data[i]);
     }
     fprintf(stderr, "   Collected aggregates\n");
@@ -121,7 +121,7 @@ bool plan_next(struct Pager *pager, struct Plan *plan, struct Row *row) {
 
         case PLAN_TABLE_SCAN:
             // fprintf(stderr, "table_scan_next\n");
-            return table_scan_next(pager, (struct TableScan *)plan, row);
+            return table_scan_next((struct TableScan *)plan, row);
 
         case PLAN_AGGREGATE:
             // fprintf(stderr, "aggregate_next\n");

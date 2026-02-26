@@ -1,18 +1,14 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include "aggregate.h"
 #include "../ast.h"
 #include "plan.h"
 #include "../data_parsing/row_parsing.h"
 
-struct Aggregate {
-    struct Plan     base;
-    struct Plan     *child;
-    bool            done;
-    struct ExprList *aggregates;
-};
 
-static struct Plan *make_aggregate(struct Plan *plan, struct ExprList *aggregates) {
+
+struct Plan *make_aggregate(struct Plan *plan, struct ExprList *aggregates) {
     struct Aggregate *aggregate = malloc(sizeof(struct Aggregate));
     if (!aggregate) {
         fprintf(stderr, "make_aggregate: *aggregate malloc failed\n");
@@ -27,7 +23,7 @@ static struct Plan *make_aggregate(struct Plan *plan, struct ExprList *aggregate
     return &aggregate->base;
 }
 
-static bool aggregate_next(struct Pager *pager, struct Aggregate *aggregate, struct Row *row) {
+bool aggregate_next(struct Pager *pager, struct Aggregate *aggregate, struct Row *row) {
     // Keep consuming rows until aggregation complete
     if (aggregate->done) {
         return false;
@@ -39,14 +35,14 @@ static bool aggregate_next(struct Pager *pager, struct Aggregate *aggregate, str
         exit(1);
     }
 
-    for (int i = 0; i < aggregate->aggregates->count; i++) {
+    for (size_t i = 0; i < aggregate->aggregates->count; i++) {
         results[i].type                 = VALUE_NULL;
         results[i].null_value.null_ptr  = NULL;
     }
     
     while (plan_next(pager, aggregate->child, row)) {
 
-        for (int i = 0; i < aggregate->aggregates->count; i++) {
+        for (size_t i = 0; i < aggregate->aggregates->count; i++) {
             struct Expr *current_aggregate = &aggregate->aggregates->data[i];
             if (current_aggregate->type != EXPR_FUNCTION) {
                 fprintf(stderr, "Aggregate should be function.\n");

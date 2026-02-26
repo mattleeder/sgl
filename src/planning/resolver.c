@@ -20,7 +20,7 @@ DEFINE_TYPED_HASH_MAP(struct Column, size_t, ColumnToIndex, column_to_index)
 // Turn column names into row indexes for each stage of the query
 
 static bool get_is_first_col_rowid(const struct Column *col) {
-    fprintf(stderr, "get_is_first_col_rowid: %.*s\n", col->name.len, col->name.start);
+    fprintf(stderr, "get_is_first_col_rowid: %.*s\n", (int)col->name.len, col->name.start);
     return col->name.len == 2 &&
            col->name.start[0] == 'i' &&
            col->name.start[1] == 'd';
@@ -83,6 +83,8 @@ static struct HashMap *get_post_aggregation_row_col_to_idx_hash_map(struct Selec
         struct Column column = { .index = i, .name = expr.text };
         hash_map_column_to_index_set(column_to_index, &column, &i);
     }
+
+    return column_to_index;
 }
 
 void set_index_for_expr_column(struct Resolver *resolver, struct ExprColumn *expr, enum PlanType type) {

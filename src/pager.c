@@ -68,7 +68,8 @@ static void read_database_header(FILE *file, struct DatabaseHeader *database_hea
 }
 
 struct Pager *pager_open(const char *database_file_path) {
-    FILE *database_file = fopen(database_file_path, "rb");
+    FILE *database_file;
+    fopen_s(&database_file, database_file_path, "rb");
     
     struct DatabaseHeader *database_header = malloc(sizeof(struct DatabaseHeader));
     if (!database_header) {
@@ -109,7 +110,7 @@ struct Pager *pager_open(const char *database_file_path) {
     pager->schema_page_header   = schema_page_header;
 
     struct Page *page;
-    for (int i = 0; i < pager->cache_capacity; i++) {
+    for (uint32_t i = 0; i < pager->cache_capacity; i++) {
         page = &pager->pages[i];
         page->data = pager->data + pager->page_size * i;
     }
@@ -137,7 +138,7 @@ static uint32_t find_suitable_cache_index(struct Pager *pager) {
     uint32_t cache_index = 0;
     uint64_t oldest = UINT64_MAX;
 
-    for (int i = 0; i < pager->cache_capacity; i++) {
+    for (uint32_t i = 0; i < pager->cache_capacity; i++) {
         struct Page *page = &pager->pages[i];
         if (!page->valid) {
             return i;
@@ -190,7 +191,7 @@ void pager_release_page(struct Page *page) {
 
 struct Page *get_page(struct Pager *pager, uint32_t page_number) {
     // 1. Check cache
-    for (int i = 0; i < pager->cache_capacity; i++) {
+    for (uint32_t i = 0; i < pager->cache_capacity; i++) {
         struct Page *page = &pager->pages[i];
         if (page->page_no == page_number && page->valid) {
             page->last_used = pager->clock++;

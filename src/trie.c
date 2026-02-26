@@ -69,7 +69,7 @@ bool add_word_to_trie(struct TriePool *pool, const char *start, size_t length, e
     int curr = 0; // root node
     struct Trie *nodes = pool->nodes;
 
-    for (int i = 0; i < length; i++) { 
+    for (size_t i = 0; i < length; i++) { 
         char c = start[i];
         int index = char_to_index(c);
 
@@ -102,7 +102,7 @@ bool is_word_in_trie(const struct TriePool *pool, const char *start, size_t leng
     int curr = 0; // root node
     const struct Trie *nodes = pool->nodes;
 
-    for (int i = 0; i < length; i++) { 
+    for (size_t i = 0; i < length; i++) { 
         char c = start[i];
         int index = char_to_index(c);
 

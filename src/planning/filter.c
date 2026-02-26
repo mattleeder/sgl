@@ -1,16 +1,13 @@
 #include <stdio.h>
 #include <stdbool.h>
 
+#include "filter.h"
 #include "../ast.h"
 #include "../sql_utils.h"
 #include "../data_parsing/row_parsing.h"
 #include "plan.h"
 
-struct Filter {
-    struct Plan     base;
-    struct Plan     *child;
-    struct ExprList *predicates;
-};
+
 
 static bool value_is_equal(struct Value *left, struct Value *right) {
     // Types should have already been checked for equality
@@ -159,7 +156,7 @@ static bool evaluate_predicate(struct Expr *predicate, struct Row *row) {
 }
 
 
-static struct Plan *make_filter(struct Plan *plan, struct ExprList *predicates) {
+struct Plan *make_filter(struct Plan *plan, struct ExprList *predicates) {
     struct Filter *filter = malloc(sizeof(struct Filter));
     if (!filter) {
         fprintf(stderr, "make_filter: *filter malloc failed\n");
@@ -174,14 +171,14 @@ static struct Plan *make_filter(struct Plan *plan, struct ExprList *predicates) 
 }
 
 
-static bool filter_next(struct Pager *pager, struct Filter *filter, struct Row *row) {
+bool filter_next(struct Pager *pager, struct Filter *filter, struct Row *row) {
     // Filter rows based on predicate
     // @TODO: doesnt need to filter rows already filtered by index
     while (plan_next(pager, filter->child, row)) {
         fprintf(stderr, "Filter\n");
         bool predicate_success = true;
 
-        for (int i = 0; i < filter->predicates->count; i++) {
+        for (size_t i = 0; i < filter->predicates->count; i++) {
 
             struct Expr *predicate = &filter->predicates->data[i];
             if (!evaluate_predicate(predicate, row)) {

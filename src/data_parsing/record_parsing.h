@@ -45,7 +45,7 @@ struct SchemaRecordBody {
     char        *schema_type;
     char        *schema_name;
     char        *table_name;
-    char        *root_page_bytes;
+    uint8_t     *root_page_bytes;
     char        *sql;
     char        *data_block;
     uint32_t    root_page;
