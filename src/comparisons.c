@@ -20,8 +20,7 @@ struct Value get_predicate_value(struct ExprBinary *predicate) {
 
         case EXPR_STRING:
             value.type              = VALUE_TEXT;
-            value.text_value.data   = expr_to_convert->string.start;
-            value.text_value.len    = expr_to_convert->string.len;
+            value.text_value.text   = expr_to_convert->string.string;
             break;
 
         default:
@@ -43,11 +42,11 @@ int compare_values(struct Value *left, struct Value *right) {
             return 1;
 
         case VALUE_TEXT: {
-            size_t len_value = left->text_value.len < right->text_value.len ? left->text_value.len : right->text_value.len;
-            int result = memcmp(left->text_value.data, right->text_value.data, len_value);
+            size_t len_value = left->text_value.text.len < right->text_value.text.len ? left->text_value.text.len : right->text_value.text.len;
+            int result = memcmp(left->text_value.text.start, right->text_value.text.start, len_value);
             if (result != 0) return result;
-            if (result == 0 && left->text_value.len == right->text_value.len) return 0;
-            if (left->text_value.len < right->text_value.len) return -1;
+            if (result == 0 && left->text_value.text.len == right->text_value.text.len) return 0;
+            if (left->text_value.text.len < right->text_value.text.len) return -1;
             return 1;
         }
 

@@ -32,10 +32,9 @@ static struct Expr *new_expr(enum ExprType type) {
     return expr;
 }
 
-static struct Expr *make_column_expr(char *start, size_t len) {
+static struct Expr *make_column_expr(const char *start, size_t len) {
     struct Expr *expr = new_expr(EXPR_COLUMN);
     expr->column.idx            = 0; // To be resolved later
-    fprintf(stderr, "make_column_expr: len: %zu, name: %.*s\n", len, len, start);
     expr->column.name.start     = start;
     expr->column.name.len       = len;
     return expr;
@@ -56,9 +55,9 @@ static struct Expr *make_star_expr() {
 static struct Expr *make_string_expr(struct Parser *parser) {
     struct Expr *expr   = new_expr(EXPR_STRING);
     // Cut off start and end quotes
-    expr->string.start  = parser->current.start + 1;
-    expr->string.len    = parser->current.length - 2;
-    fprintf(stderr, "Made String Expr: %.*s\n", (int)expr->string.len, expr->string.start);
+    expr->string.string.start  = parser->current.start + 1;
+    expr->string.string.len    = parser->current.length - 2;
+    fprintf(stderr, "Made String Expr: %.*s\n", (int)expr->string.string.len, expr->string.string.start);
     return expr;
 }
 
@@ -374,8 +373,8 @@ struct CreateIndexStatement *parse_create_index(struct Parser *parser, const cha
 
 
     // Could be schema name, read as index name for now
-    stmt->index_name        = parser->current.start;
-    stmt->index_name_len    = parser->current.length;
+    stmt->index_name.start  = parser->current.start;
+    stmt->index_name.len    = parser->current.length;
 
     advance(parser, &scanner);
 
@@ -387,8 +386,8 @@ struct CreateIndexStatement *parse_create_index(struct Parser *parser, const cha
             exit(1);
         }
 
-        stmt->index_name        = parser->current.start;
-        stmt->index_name_len    = parser->current.length;
+        stmt->index_name.start  = parser->current.start;
+        stmt->index_name.len    = parser->current.length;
     }
 
     consume(parser, &scanner, TOKEN_ON, "Expected 'ON'.");

@@ -3,6 +3,7 @@
 
 #include <stdint.h>
 
+#include "../common.h"
 #include "../pager.h"
 #include "page_parsing.h"
 #include "cell_parsing.h"
@@ -28,8 +29,7 @@ struct FloatValue {
 };
 
 struct TextValue {
-    char    *data;
-    size_t  len;
+    struct UnterminatedString text;
 };
 
 struct Value {

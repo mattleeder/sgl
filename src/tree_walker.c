@@ -262,10 +262,15 @@ void leaf_table_step(struct SubWalker *walker, struct SubWalkerList *list, struc
 
 void interior_index_step(struct SubWalker *walker, struct SubWalkerList *list, struct Row *row, uint64_t *next_rowid, bool *rowid_valid) {
     // fprintf(stderr, "interior_index_step, page: %d\n", walker->page_header->page_number);
-    struct Row index_row;
+    struct Row index_row = { .column_count = 0, .rowid = 0, .values = NULL };
     struct ExprBinary predicate = walker->index->predicates->data[0];
     struct Value predicate_value = get_predicate_value(&predicate);
     
+    if (walker->page_header->number_of_cells == 0) {
+        fprintf(stderr, "interior_index_step: %d\n", walker->page_header->number_of_cells);
+    }
+
+    // fprintf(stderr, "HERE\n");
     // Binary search to find first key where predicate is met
     uint16_t lo = walker->current_index;
     uint16_t hi = walker->page_header->number_of_cells - 1;
@@ -286,6 +291,8 @@ void interior_index_step(struct SubWalker *walker, struct SubWalkerList *list, s
             lo =  mid + 1;
         }
     }
+
+    // Doesnt get here
 
     // lo should give last false index
     // hi should give first true index
@@ -462,7 +469,7 @@ struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, stru
 }
 
 bool produce_rowid(struct TreeWalker *walker, struct Row *row, uint64_t *next_rowid) {
-    // fprintf(stderr, "produce_rowid\n");
+    fprintf(stderr, "produce_rowid\n");
     bool rowid_valid = false;
     while (walker->index_list->count > 0) {
         struct SubWalker *last_sub_walker = walker->index_list->data[walker->index_list->count - 1];
@@ -478,7 +485,7 @@ bool produce_row(struct TreeWalker *walker, struct Row *row) {
     uint64_t next_rowid = walker->current_rowid;
     bool rowid_valid = false;
 
-    // fprintf(stderr, "Find rowid\n");
+    fprintf(stderr, "Find rowid\n");
     if (walker->index_list != NULL) {
         if (walker->index_list->count == 0) {
             return false;
@@ -490,7 +497,7 @@ bool produce_row(struct TreeWalker *walker, struct Row *row) {
         }
     }
 
-    // fprintf(stderr, "Next rowid: %lld, current rowid: %lld\n", next_rowid, walker->current_rowid);
+    fprintf(stderr, "Next rowid: %lld, current rowid: %lld\n", next_rowid, walker->current_rowid);
     if (next_rowid < walker->current_rowid) {
         fprintf(stderr, "Next rowid: %lld is less than current rowid %lld.\n", next_rowid, walker->current_rowid);
         return false;
@@ -502,7 +509,7 @@ bool produce_row(struct TreeWalker *walker, struct Row *row) {
         return false;
     }
 
-    // fprintf(stderr, "Search in table tree for rowid: %lld\n", next_rowid);
+    fprintf(stderr, "Search in table tree for rowid: %lld\n", next_rowid);
     bool row_valid = false;
     while (walker->table_list->count > 0) {
         struct SubWalker *last_sub_walker = walker->table_list->data[walker->table_list->count - 1];
@@ -516,7 +523,7 @@ bool produce_row(struct TreeWalker *walker, struct Row *row) {
         return false;
     }
 
-    // print_row_to_stderr(row);
+    print_row_to_stderr(row);
     walker->current_rowid++;
     return true;
 }

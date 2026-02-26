@@ -34,8 +34,7 @@ struct ExprInteger {
 };
 
 struct ExprString {
-    char    *start;
-    size_t  len;
+    struct UnterminatedString string;
 };
 
 struct ExprColumn {
@@ -106,10 +105,9 @@ struct FromStatement {
 
 // Create Index Statement
 struct CreateIndexStatement {
-    char            *index_name;
-    size_t           index_name_len;
-    char            *on_table;
-    struct Columns  *indexed_columns;
+    struct UnterminatedString   index_name;
+    char                        *on_table;
+    struct Columns              *indexed_columns;
 };
 
 void print_expr_star_to_stderr(int padding);

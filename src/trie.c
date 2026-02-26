@@ -14,7 +14,7 @@ is the sum of all the string lengths
 #define ALPHABET_SIZE   (26)
 #define EMPTY_CHILD     (-1)
 
-static struct Trie {
+struct Trie {
     int16_t             sub_tries[ALPHABET_SIZE]; // Index to the node pool, -1 means absent
     bool                end_of_word;
     enum TokenType      token_type;

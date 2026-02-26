@@ -43,7 +43,7 @@ void print_expr_string_to_stderr(struct ExprString *string, int padding) {
     assert(string != NULL);
 
     fprintf(stderr, "%*sString\n", padding, "");
-    fprintf(stderr, "%*s%.*s\n", padding + 4, "", (int)string->len, string->start);
+    fprintf(stderr, "%*s%.*s\n", padding + 4, "", (int)string->string.len, string->string.start);
 }
 
 void print_expression_to_stderr(struct Expr *expr, int padding) {

@@ -6,7 +6,7 @@
 #include "../data_parsing/row_parsing.h"
 #include "plan.h"
 
-static struct Filter {
+struct Filter {
     struct Plan     base;
     struct Plan     *child;
     struct ExprList *predicates;
@@ -23,10 +23,7 @@ static bool value_is_equal(struct Value *left, struct Value *right) {
 
         case VALUE_TEXT:
             // fprintf(stderr, "%.*s == %.*s\n", left->text_value.len, left->text_value.data, right->text_value.len, right->text_value.data);
-            if (left->text_value.len != right->text_value.len) {
-                return false;
-            }
-            return (memcmp(left->text_value.data, right->text_value.data, left->text_value.len) == 0);
+            return unterminated_string_equals(&left->text_value.text, &right->text_value.text);
 
         case VALUE_NULL:
             // NULL == NULL
@@ -51,9 +48,7 @@ static bool value_is_less(struct Value *left, struct Value *right) {
             return left->int_value.value < right->int_value.value;
 
         case VALUE_TEXT: {
-            // @TODO: edge case where prefixes are same but lengths are different
-            size_t length = (left->text_value.len <= right->text_value.len) ? left->text_value.len : right->text_value.len;
-            return (strncmp(left->text_value.data, right->text_value.data, length) < 0);
+            return unterminated_string_less_than(&left->text_value.text, &right->text_value.text);
         }
 
         case VALUE_NULL:
@@ -79,9 +74,7 @@ static bool value_is_greater(struct Value *left, struct Value *right) {
             return left->int_value.value > right->int_value.value;
 
         case VALUE_TEXT: {
-            // @TODO: edge case where prefixes are same but lengths are different
-            size_t length = left->text_value.len <= right->text_value.len ? left->text_value.len : right->text_value.len;
-            return (strncmp(left->text_value.data, right->text_value.data, length) > 0);
+            return unterminated_string_greater_than(&left->text_value.text, &right->text_value.text);
         }
 
         case VALUE_NULL:
@@ -110,8 +103,7 @@ static struct Value expr_to_value(struct Expr *expr, struct Row *row) {
             
         case EXPR_STRING:
             value.type              = VALUE_TEXT;
-            value.text_value.data   = expr->string.start;
-            value.text_value.len    = expr->string.len;
+            value.text_value.text   = expr->string.string;
             break;
 
         case EXPR_COLUMN: {
@@ -186,6 +178,7 @@ static bool filter_next(struct Pager *pager, struct Filter *filter, struct Row *
     // Filter rows based on predicate
     // @TODO: doesnt need to filter rows already filtered by index
     while (plan_next(pager, filter->child, row)) {
+        fprintf(stderr, "Filter\n");
         bool predicate_success = true;
 
         for (int i = 0; i < filter->predicates->count; i++) {

@@ -75,8 +75,7 @@ static void decode_column(uint8_t *data, struct ContentType type, struct Value *
             
         case SQL_STRING:
             value->type             = VALUE_TEXT;
-            value->text_value.data  = data;
-            value->text_value.len   = type.content_size;
+            value->text_value.text  = (struct UnterminatedString){ .start = data, .len = type.content_size };
             break;
             
         case SQL_INVALID:
@@ -159,7 +158,7 @@ void print_value(struct Value *value) {
             break;
 
         case VALUE_TEXT:
-            printf("%.*s", (int)value->text_value.len, value->text_value.data);
+            printf("%.*s", (int)value->text_value.text.len, value->text_value.text.start);
             break;
 
         default:
@@ -189,7 +188,7 @@ void print_value_to_stderr(struct Value *value) {
             break;
 
         case VALUE_TEXT:
-            fprintf(stderr, "%.*s", (int)value->text_value.len, value->text_value.data);
+            fprintf(stderr, "%.*s", (int)value->text_value.text.len, value->text_value.text.start);
             break;
 
         default:
