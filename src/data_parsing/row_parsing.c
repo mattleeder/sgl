@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "byte_reader.h"
 #include "row_parsing.h"
@@ -90,31 +91,40 @@ static void decode_column(uint8_t *data, struct ContentType type, struct Value *
 }
 
 void read_row_from_record(struct Record *record, struct Row *row, struct Cell *cell) {
+    assert(record->header.number_of_columns > 0);
+
     row->column_count   = record->header.number_of_columns;
     row->values         = malloc(record->header.number_of_columns * sizeof(struct Value));
-
+    
     if (!row->values) {
         fprintf(stderr, "read_row_from_record: row->values malloc failed\n");
         exit(1);
     }
+
 
     for (int i = 0; i < record->header.number_of_columns; i++) {
         decode_column(record->body.column_pointers[i], record->header.columns[i], &row->values[i]);
     }
 
     switch (cell->type) {
-        case PAGE_LEAF_TABLE:
+        case TABLE_LEAF_CELL:
             row->rowid = cell->data.table_leaf_cell.row_id;
             break;
 
-        case PAGE_INTERIOR_INDEX:
-        case PAGE_LEAF_INDEX:
+        case INDEX_INTERIOR_CELL:
+        case INDEX_LEAF_CELL:
             row->rowid = row->values[0].int_value.value;
             break;
         
         default:
             fprintf(stderr, "Cannot read record using page type: %d\n", cell->type);
             exit(1);
+    }
+
+    if (row->rowid == 0)  {
+        fprintf(stderr, "read_row_from_record: BAD ROWID on cell type: %d\n", cell->type);
+        print_row_to_stderr(row);
+        exit(1);
     }
 }
 
@@ -206,11 +216,10 @@ void print_row_to_stderr(struct Row *row) {
         exit(1);
     }
 
-    for (int i = 0; i < row->column_count; i++) {
-        if (i > 0) {
-            fprintf(stderr, "|");
-        }
+    fprintf(stderr, "%d", row->rowid);
 
+    for (int i = 0; i < row->column_count; i++) {
+        fprintf(stderr, "|");
         print_value_to_stderr(&row->values[i]);
     }
 

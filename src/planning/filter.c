@@ -115,7 +115,6 @@ static struct Value expr_to_value(struct Expr *expr, struct Row *row) {
             break;
 
         case EXPR_COLUMN: {
-            fprintf(stderr, "expr_to_value: taking col value from idx: %zu\n", expr->column.idx);
             value = row->values[expr->column.idx];
             break;
 
@@ -137,11 +136,6 @@ static bool evaluate_predicate(struct Expr *predicate, struct Row *row) {
 
     struct Value left_value     = expr_to_value(predicate->binary.left, row);
     struct Value right_value    = expr_to_value(predicate->binary.right, row);
-
-    print_value_to_stderr(&left_value);
-    fprintf(stderr, "\n");
-    print_value_to_stderr(&right_value);
-    fprintf(stderr, "\n");
 
     if (left_value.type != right_value.type) {
         // fprintf(stderr, "evaluate_predicate: mismatched types %d, %d.\n", left_value.type, right_value.type);
@@ -192,7 +186,6 @@ static bool filter_next(struct Pager *pager, struct Filter *filter, struct Row *
     // Filter rows based on predicate
     // @TODO: doesnt need to filter rows already filtered by index
     while (plan_next(pager, filter->child, row)) {
-        print_row_to_stderr(row);
         bool predicate_success = true;
 
         for (int i = 0; i < filter->predicates->count; i++) {
@@ -205,7 +198,6 @@ static bool filter_next(struct Pager *pager, struct Filter *filter, struct Row *
         }
 
         if (predicate_success) {
-            fprintf(stderr, "Return row\n");
             return true;
         }
     }

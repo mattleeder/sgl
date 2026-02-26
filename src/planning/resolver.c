@@ -20,9 +20,10 @@ DEFINE_TYPED_HASH_MAP(struct Column, size_t, ColumnToIndex, column_to_index)
 // Turn column names into row indexes for each stage of the query
 
 static bool get_is_first_col_rowid(const struct Column *col) {
-    const char buffer[2] = "id";
-    struct UnterminatedString id_string = { .start = buffer, .len = 2};
-    return unterminated_string_equals(&col->name, &id_string);
+    fprintf(stderr, "get_is_first_col_rowid: %.*s\n", col->name.len, col->name.start);
+    return col->name.len == 2 &&
+           col->name.start[0] == 'i' &&
+           col->name.start[1] == 'd';
 }
 
 static struct Columns *load_table_columns(struct Pager *pager, const char *table_name) {
@@ -43,7 +44,7 @@ static void add_table_to_hash_map(struct HashMap *hash_map, const struct Columns
     }
 }
 
-static struct HashMap *get_full_row_col_to_idx_hash_map(struct Pager *pager, struct SelectStatement *stmt) {
+static struct HashMap *get_full_row_col_to_idx_hash_map(struct Resolver *resolver, struct Pager *pager, struct SelectStatement *stmt) {
 
     struct HashMap *column_to_index = hash_map_column_to_index_new(
         INITIAL_HASH_MAP_CAPACITY,
@@ -54,6 +55,9 @@ static struct HashMap *get_full_row_col_to_idx_hash_map(struct Pager *pager, str
 
     // Will iterate through tables when there are multiple
     struct Columns *columns = load_table_columns(pager, stmt->from_table);
+    // @TODO: should this be elsewhere?
+    print_unterminated_string_to_stderr(&columns->data[0].name);
+    resolver->first_col_is_rowid = get_is_first_col_rowid(&columns->data[0]);
     add_table_to_hash_map(column_to_index, columns, 0);
     // vector_columns_free(columns);
 
@@ -161,7 +165,7 @@ struct Resolver *new_resolver(bool query_has_aggregates) {
 
     resolver->full_row_col_to_idx       = NULL;
     resolver->post_agg_row_col_to_idx   = NULL;
-    resolver->first_col_id_rowid        = false;
+    resolver->first_col_is_rowid        = false;
     resolver->query_has_aggregates      = query_has_aggregates;
 
     return resolver;
@@ -169,7 +173,7 @@ struct Resolver *new_resolver(bool query_has_aggregates) {
 
 struct Resolver *resolver_init(struct Resolver *resolver, struct Pager *pager, struct SelectStatement *stmt) {
 
-    resolver->full_row_col_to_idx = get_full_row_col_to_idx_hash_map(pager, stmt);
+    resolver->full_row_col_to_idx = get_full_row_col_to_idx_hash_map(resolver, pager, stmt);
     resolver->post_agg_row_col_to_idx = get_post_aggregation_row_col_to_idx_hash_map(stmt);
 
     return resolver;

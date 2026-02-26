@@ -106,7 +106,7 @@ struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt) {
 
     fprintf(stderr, "   build_plan: make projection:\n");
     struct SizeTVec *indexes = get_projection_indexes(resolver, stmt);
-    plan = make_projection(plan, indexes);
+    plan = make_projection(plan, indexes, resolver->first_col_is_rowid);
     fprintf(stderr, "   build_plan: projection made:\n");
     return plan;
 }
@@ -144,7 +144,6 @@ void plan_execute(struct Pager *pager, struct Plan *plan) {
     fprintf(stderr, "Execute Plan\n");
     struct Row row;
     while (plan_next(pager, plan, &row)) {
-        fprintf(stderr, "Printing row\n");
         print_row(&row);
         free(row.values);
         row.values = NULL;

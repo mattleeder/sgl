@@ -10,7 +10,7 @@
 struct Resolver {
     struct HashMap *full_row_col_to_idx;
     struct HashMap *post_agg_row_col_to_idx;
-    bool            first_col_id_rowid;
+    bool            first_col_is_rowid;
     bool            query_has_aggregates;
 };
 

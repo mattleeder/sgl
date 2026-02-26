@@ -10,18 +10,22 @@ struct Projection {
     struct Plan     base;
     struct Plan     *child;
     struct SizeTVec *column_indexes;
+    bool            first_col_is_rowid;
 };
 
-static struct Plan *make_projection(struct Plan *plan, struct SizeTVec *indexes) {
+static struct Plan *make_projection(struct Plan *plan, struct SizeTVec *indexes, bool first_col_is_rowid) {
     struct Projection *projection = malloc(sizeof(struct Projection));
     if (!projection) {
         fprintf(stderr, "make_projection: *projection malloc failed\n");
         exit(1);
     }
 
-    projection->base.type       = PLAN_PROJECTION;
-    projection->child           = plan;
-    projection->column_indexes  = indexes;
+    projection->base.type           = PLAN_PROJECTION;
+    projection->child               = plan;
+    projection->column_indexes      = indexes;
+    projection->first_col_is_rowid  = first_col_is_rowid;
+
+    fprintf(stderr, "Projection: first_col_is_rowid: %d\n", first_col_is_rowid);
 
     return &projection->base;
 }
@@ -42,7 +46,11 @@ static bool projection_next(struct Pager *pager, struct Projection *projection, 
     }
     memcpy(original_row_order.values, row->values, row->column_count * sizeof(struct Value));
 
-    for (size_t i = 0; i < projection->column_indexes->count; i++) {
+    if (projection->first_col_is_rowid) {
+        row->values[0] = (struct Value){ .type = VALUE_INT, .int_value = { .value = row->rowid } };
+    }
+
+    for (size_t i = projection->first_col_is_rowid ? 1 : 0; i < projection->column_indexes->count; i++) {
         size_t idx = projection->column_indexes->data[i];
         row->values[i] = original_row_order.values[idx];
     }

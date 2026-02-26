@@ -6,6 +6,7 @@
 #include "../pager.h"
 #include "page_parsing.h"
 
+//@TODO: should we just use page type?
 enum CellType {
     TABLE_LEAF_CELL,
     TABLE_INTERIOR_CELL,

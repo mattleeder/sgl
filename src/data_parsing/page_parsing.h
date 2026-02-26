@@ -15,10 +15,10 @@
 #define PAGE_RIGHT_MOST_POINTER_OFFSET      8 // Only for interior pages
 
 enum PageType {
-    PAGE_INTERIOR_INDEX,
+    PAGE_LEAF_TABLE,
     PAGE_INTERIOR_TABLE,
     PAGE_LEAF_INDEX,
-    PAGE_LEAF_TABLE,
+    PAGE_INTERIOR_INDEX,
     PAGE_INVALID
 };
 
