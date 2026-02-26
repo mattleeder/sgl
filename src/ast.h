@@ -6,6 +6,7 @@
 #include "common.h"
 #include "memory.h"
 #include "sql_utils.h"
+#include "./utilities/hash_map.h"
 
 enum AstNodeType {
     AST_SELECT,

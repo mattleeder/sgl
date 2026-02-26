@@ -35,6 +35,7 @@ static struct Expr *new_expr(enum ExprType type) {
 static struct Expr *make_column_expr(char *start, size_t len) {
     struct Expr *expr = new_expr(EXPR_COLUMN);
     expr->column.idx            = 0; // To be resolved later
+    fprintf(stderr, "make_column_expr: len: %zu, name: %.*s\n", len, len, start);
     expr->column.name.start     = start;
     expr->column.name.len       = len;
     return expr;

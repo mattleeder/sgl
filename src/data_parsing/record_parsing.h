@@ -4,6 +4,8 @@
 #include <stdint.h>
 #include <stdbool.h>
 
+#include "./cell_parsing.h"
+
 #define SCHEMA_COLUMN_COUNT (5)
 
 enum ContentTypeName {
@@ -86,4 +88,4 @@ void read_cell_and_schema_record(struct Pager *pager,
     uint16_t cell_offset,
     struct SchemaRecord *schema_record);
 
-#endif sql_record_parsing
+#endif

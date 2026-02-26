@@ -8,7 +8,7 @@ struct UnterminatedString {
     size_t      len;
 };
 
-bool unterminated_string_equals(struct UnterminatedString *a, struct UnterminatedString *b);
-void print_unterminated_string_to_stderr(struct UnterminatedString *string);
+bool unterminated_string_equals(const struct UnterminatedString *a, const struct UnterminatedString *b);
+void print_unterminated_string_to_stderr(const struct UnterminatedString *string);
 
 #endif

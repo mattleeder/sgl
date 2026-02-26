@@ -1,6 +1,8 @@
 #include <stdint.h>
 #include <stdio.h>
+#include <stdlib.h>
 
+#include "byte_reader.h"
 #include "row_parsing.h"
 #include "cell_parsing.h"
 #include "record_parsing.h"

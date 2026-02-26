@@ -1,5 +1,6 @@
 #include <stdint.h>
 #include <stdbool.h>
+#include <stddef.h>
 
 static uint64_t read_big_endian(const uint8_t *data, size_t offset, size_t num_bytes) {
     uint64_t value = 0;

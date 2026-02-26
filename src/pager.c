@@ -4,6 +4,7 @@
 #include <stdlib.h>
 
 #include "pager.h"
+#include "data_parsing/byte_reader.h"
 #include "data_parsing/page_parsing.h"
 #include "sql_utils.h"
 

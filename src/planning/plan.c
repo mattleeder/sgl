@@ -72,48 +72,46 @@ struct Plan *build_plan(struct Pager *pager, struct SelectStatement *stmt) {
     fprintf(stderr, "Building plan\n");
     struct ExprList *aggregate_exprs = vector_expr_list_new();
     for (int i = 0; i < stmt->select_list->count; i++) {
-        fprintf(stderr, "loop\n");
         collect_aggregates(aggregate_exprs, &stmt->select_list->data[i]);
     }
-    fprintf(stderr, "Collected aggregates\n");
+    fprintf(stderr, "   Collected aggregates\n");
 
     bool query_has_aggregates = (aggregate_exprs != NULL && aggregate_exprs->count > 0);
 
-    fprintf(stderr, "query_has_aggregates: %d\n", query_has_aggregates);
+    fprintf(stderr, "   query_has_aggregates: %d\n", query_has_aggregates);
 
-    fprintf(stderr, "build_plan: make resolver\n");
+    fprintf(stderr, "   build_plan: make resolver\n");
     struct Resolver *resolver = new_resolver(query_has_aggregates);
     resolver_init(resolver, pager, stmt);
 
-    fprintf(stderr, "build_plan: make table scan\n");
-    struct TableScan *plan = make_table_scan(pager, stmt);
+    fprintf(stderr, "   build_plan: make table scan\n");
+    struct Plan *plan = make_table_scan(pager, stmt);
 
-    fprintf(stderr, "build_plan: columns:\n");
+    fprintf(stderr, "   build_plan: columns:\n");
 
-    fprintf(stderr, "build_plan: make filter:\n");
+    fprintf(stderr, "   build_plan: make filter:\n");
     if (stmt->where_list != NULL) {
-        resolve_column_names(resolver, stmt->where_list);
+        resolve_column_names(resolver, stmt->where_list, PLAN_FILTER);
         plan = make_filter(plan, stmt->where_list);
     }
-    fprintf(stderr, "build_plan: filter made:\n");
+    fprintf(stderr, "   build_plan: filter made:\n");
 
-    fprintf(stderr, "build_plan: collect aggregates:\n");
+    fprintf(stderr, "   build_plan: collect aggregates:\n");
 
     if (query_has_aggregates) {
-        fprintf(stderr, "Plan contains aggregates.\n");
+        fprintf(stderr, "   Plan contains aggregates.\n");
         plan = make_aggregate(plan, aggregate_exprs);
     }
-    fprintf(stderr, "build_plan: aggregates collected:\n");
+    fprintf(stderr, "   build_plan: aggregates collected:\n");
 
-    fprintf(stderr, "build_plan: make projection:\n");
+    fprintf(stderr, "   build_plan: make projection:\n");
     struct SizeTVec *indexes = get_projection_indexes(resolver, stmt);
-    fprintf(stderr, "Got indexes\n");
     plan = make_projection(plan, indexes);
-    fprintf(stderr, "build_plan: projection made:\n");
+    fprintf(stderr, "   build_plan: projection made:\n");
     return plan;
 }
 
-static bool plan_next(struct Pager *pager, struct Plan *plan, struct Row *row) {
+bool plan_next(struct Pager *pager, struct Plan *plan, struct Row *row) {
     if (plan == NULL) {
         fprintf(stderr, "plan_next: NULL plan\n");
         exit(1);
@@ -123,7 +121,7 @@ static bool plan_next(struct Pager *pager, struct Plan *plan, struct Row *row) {
 
         case PLAN_TABLE_SCAN:
             // fprintf(stderr, "table_scan_next\n");
-            return table_scan_next(pager, plan, row);
+            return table_scan_next(pager, (struct TableScan *)plan, row);
 
         case PLAN_AGGREGATE:
             // fprintf(stderr, "aggregate_next\n");
@@ -135,7 +133,7 @@ static bool plan_next(struct Pager *pager, struct Plan *plan, struct Row *row) {
 
         case PLAN_PROJECTION:
             // fprintf(stderr, "projection_next\n");
-            return projection_next(pager, plan, row);
+            return projection_next(pager, (struct Projection *)plan, row);
 
         default:
             return false;

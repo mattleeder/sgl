@@ -4,7 +4,7 @@
 
 #include "common.h"
 
-bool unterminated_string_equals(struct UnterminatedString *a, struct UnterminatedString *b) {
+bool unterminated_string_equals(const struct UnterminatedString *a, const struct UnterminatedString *b) {
     fprintf(stderr, "unterminated_string_equals: comparing '%.*s' and '%.*s'\n", a->len, a->start, b->len, b->start);
     if (a->len != b->len) {
         return false;
@@ -17,6 +17,6 @@ bool unterminated_string_equals(struct UnterminatedString *a, struct Unterminate
     return (strncmp(a->start, b->start, b->len) == 0);
 }
 
-void print_unterminated_string_to_stderr(struct UnterminatedString *string) {
+void print_unterminated_string_to_stderr(const struct UnterminatedString *string) {
     fprintf(stderr, "%.*s\n", string->len, string->start);
 }

@@ -69,7 +69,7 @@ void remove_last_walker(struct SubWalkerList *sub_walker_list) {
 }
 
 // Step 1.
-struct SubWalker *new_sub_walker(struct Pager *pager, uint32_t page, struct Index *index) {
+struct SubWalker *new_sub_walker(struct Pager *pager, uint32_t page, struct IndexData *index) {
     struct SubWalker *walker = malloc(sizeof(struct SubWalker));
     
     if (!walker) {

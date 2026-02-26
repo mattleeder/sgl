@@ -19,10 +19,10 @@ DEFINE_TYPED_HASH_MAP(struct Column, size_t, ColumnToIndex, column_to_index)
 
 // Turn column names into row indexes for each stage of the query
 
-static bool get_is_first_col_rowid(struct Column *col) {
-    const char buffer = "id";
-    struct UnterminatedString id_string = { .start = &buffer, .len = 2};
-    return unterminated_string_equals(col, &id_string);
+static bool get_is_first_col_rowid(const struct Column *col) {
+    const char buffer[2] = "id";
+    struct UnterminatedString id_string = { .start = buffer, .len = 2};
+    return unterminated_string_equals(&col->name, &id_string);
 }
 
 static struct Columns *load_table_columns(struct Pager *pager, const char *table_name) {
@@ -81,28 +81,53 @@ static struct HashMap *get_post_aggregation_row_col_to_idx_hash_map(struct Selec
     }
 }
 
-void resolve_column_names(struct Resolver *resolver, struct ExprList *expr_list);
-static void resolve_columns(struct Resolver *resolver, struct Expr *expr) {
+void set_index_for_expr_column(struct Resolver *resolver, struct ExprColumn *expr, enum PlanType type) {
+    fprintf(stderr, "set_index_for_expr_column: called\n");
+    print_expr_column_to_stderr(expr, 4);
+    switch (type) {
+        case PLAN_FILTER: {
+            struct Column column = { .index = 0, .name = expr->name };
+            size_t *idx = hash_map_column_to_index_get(resolver->full_row_col_to_idx, &column);
+            expr->idx = *idx;
+            break;
+        }
+
+        case PLAN_PROJECTION: {    
+            struct Column column = { .index = 0, .name = expr->name };
+            struct HashMap *hash_map = resolver->query_has_aggregates ? resolver->post_agg_row_col_to_idx : resolver->full_row_col_to_idx;
+            size_t *idx = hash_map_column_to_index_get(hash_map, &column);
+            expr->idx = *idx;
+            break;
+        }
+
+        default:
+            fprintf(stderr, "get_index_for_expr_column: unsupported plan type %d\n", type);
+    }
+}
+
+void resolve_column_names(struct Resolver *resolver, struct ExprList *expr_list, enum PlanType type);
+static void resolve_columns(struct Resolver *resolver, struct Expr *expr, enum PlanType type) {
     switch (expr->type) {
         case EXPR_INTEGER:
         case EXPR_STRING:
             break;
 
         case EXPR_BINARY:
-            resolve_columns(resolver, expr->binary.left);
-            resolve_columns(resolver, expr->binary.right);
+            resolve_columns(resolver, expr->binary.left, type);
+            resolve_columns(resolver, expr->binary.right, type);
             break;
 
         case EXPR_COLUMN:
-            // Get column index
+            // @TODO: Get column index
+            set_index_for_expr_column(resolver, &expr->column, type);
             break;
 
         case EXPR_FUNCTION:
-            resolve_column_names(resolver, expr->function.args);
+            resolve_column_names(resolver, expr->function.args, type);
             break;
 
         case EXPR_UNARY:
-            resolve_columns(resolver, expr->unary.right);
+            resolve_columns(resolver, expr->unary.right, type);
             break;
 
         case EXPR_STAR:
@@ -114,32 +139,16 @@ static void resolve_columns(struct Resolver *resolver, struct Expr *expr) {
     }
 }
 
-static size_t get_index(struct Resolver *resolver, struct Column *column, struct Plan *plan) {
-    switch (plan->type) {
-        case PLAN_TABLE_SCAN:
-        case PLAN_FILTER:
-        case PLAN_AGGREGATE:
-            return hash_map_column_to_index_get(&resolver->full_row_col_to_idx, column);
-
-        case PLAN_PROJECTION:
-            // @TODO: what if there are no aggregates?
-            if (resolver->query_has_aggregates) return hash_map_column_to_index_get(&resolver->post_agg_row_col_to_idx, column);
-            return hash_map_column_to_index_get(&resolver->full_row_col_to_idx, column);
-
-        default:
-            fprintf(stderr, "Unknown plan type %d.\n", plan->type);
-            exit(1);
-    }
-}
-
-void resolve_column_names(struct Resolver *resolver, struct ExprList *expr_list) {
+void resolve_column_names(struct Resolver *resolver, struct ExprList *expr_list, enum PlanType type) {
     if (!expr_list) {
         return;
     }
 
     for (size_t i = 0; i < expr_list->count; i++) {
         struct Expr *expr = &expr_list->data[i];
-        resolve_columns(resolver, expr);
+        fprintf(stderr, "Resolving\n");
+        print_expression_to_stderr(expr, 4);
+        resolve_columns(resolver, expr, type);
     }
 }
 

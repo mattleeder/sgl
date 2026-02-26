@@ -17,14 +17,14 @@ void print_expr_column_to_stderr(struct ExprColumn *column, int padding) {
     assert(column != NULL);
 
     fprintf(stderr, "%*sColumn\n", padding, "");
-    fprintf(stderr, "%*sName: %*s\n", padding + 4, "", column->name.len, column->name.start);
+    fprintf(stderr, "%*sName: %.*s\n", padding + 4, "", column->name.len, column->name.start);
 }
 
 void print_expr_function_to_stderr(struct ExprFunction *function, int padding) {
     assert(function != NULL);
 
     fprintf(stderr, "%*sFunction\n", padding, "");
-    fprintf(stderr, "%*sName: %s\n", padding + 4, "", function->name);
+    fprintf(stderr, "%*sName: %.*s\n", padding + 4, "", function->name);
     print_expression_list_to_stderr(function->args, padding + 4);
 }
 
@@ -194,20 +194,32 @@ struct IndexComparisonArray *get_index_comparisons(struct ExprList *expr_list) {
             continue;
         }
 
-        struct Columns *columns = malloc(sizeof(struct Columns));
-        if (!columns) {
-            fprintf(stderr, "get_column_index_comparisons: failed to malloc columns\n");
-            exit(1);
-        }
+        struct HashMap *column_to_bool_hash_map = hash_map_column_to_bool_new(
+            HASH_MAP_MIN_CAPACITY,
+            0.75,
+            hash_column_ptr,
+            equals_column_ptr
+        );
 
-        get_column_from_expression(expr, columns);
-        if (columns->count == 0) {
-            free(columns);
+        get_column_from_expression(expr, column_to_bool_hash_map);
+        if (column_to_bool_hash_map->element_count == 0) {
+            hash_map_column_to_bool_free(column_to_bool_hash_map);
             continue;
         }
 
+        size_t number_of_columns;
+        struct Column **column_keys = hash_map_column_to_bool_get_keys_alloc(column_to_bool_hash_map, &number_of_columns);
+
+        struct Columns *columns = vector_columns_new();
+        for (size_t i = 0; i < number_of_columns; i++) {
+            vector_columns_push(columns, *column_keys[i]);
+        }
+        
+
         struct IndexComparison comparison = { .binary = expr->binary, .columns = columns };
         vector_index_comparison_array_push(array, comparison);
+
+        hash_map_column_to_bool_free(column_to_bool_hash_map);
     }
 
     return array;

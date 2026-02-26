@@ -23,7 +23,7 @@ bool add_overflow_size_t(size_t a, size_t b, size_t *out) {
     return true;
 }
 
-struct SchemaRecord *get_schema_record_for_table(struct Pager *pager, char *table_name) {
+struct SchemaRecord *get_schema_record_for_table(struct Pager *pager, const char *table_name) {
     // Read schema
     int16_t number_of_tables = pager->schema_page_header->number_of_cells;
     uint16_t *schema_offsets = read_cell_pointer_array(pager, pager->schema_page_header);

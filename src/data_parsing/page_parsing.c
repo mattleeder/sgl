@@ -1,5 +1,7 @@
 #include <stdint.h>
+#include <stdlib.h>
 
+#include "byte_reader.h"
 #include "page_parsing.h"
 #include "../pager.h"
 
