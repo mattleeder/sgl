@@ -55,9 +55,9 @@ uint64_t read_varint(const uint8_t *data, uint64_t *bytes_read) {
 
     uint64_t varint = 0;
     uint8_t byte;
+    uint64_t dummy = 0;
 
     if (bytes_read == NULL) {
-        uint64_t dummy = 0;
         bytes_read = &dummy;
     }
 

@@ -19,9 +19,9 @@ keywords are case insensitive.
 
 | Statement Structure |  |
 |---|---|
-| selectStatment    | **'SELECT'** expressionList fromStatement |
+| selectStatment    | **'SELECT'** expressionListCS fromStatement |
 | fromStatement     | **'FROM'** tableName whereStatement?|
-| whereStatement    | **'WHERE'** expression |
+| whereStatement    | **'WHERE'** expressionListANDS |
 | columnName        | identifier |
 | tableName         | identifier |
 | functionName      | idenfifier |
@@ -33,5 +33,21 @@ keywords are case insensitive.
 | term              | integerConstant \| stringConstant \| columnName \| functionCall \| star |
 | op                | **'='** \| **'<'** \| **'>'** \| **'!='** |
 | functionCall      | functionName **'('** expressionList **')'** |
-| expressionList    | (expression (**','** expression)* )? |
+| expressionListCS (comma separated)    | (expression (**','** expression)* )? |
+| expressionListANDS (AND separated)    | (expression (**'AND'** expression)* )? |
 | star              | **'*'** |
+
+
+
+Need to add
+    - Joins
+    - Group
+    - Order
+    - Having
+    - Insert
+    - Update
+    - Delete
+    - Create
+    - Alter
+    - Drop
+    - Transactions

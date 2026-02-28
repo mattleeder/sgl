@@ -12,7 +12,7 @@
 #include "sql_utils.h"
 #include "memory.h"
 
-static struct ExprList *parse_expression_list(struct Parser *parser, struct Scanner *scanner);
+static struct ExprList *parse_comma_separated_expression_list(struct Parser *parser, struct Scanner *scanner);
 
 static char *get_token_string(struct Token *token) {
     char *buffer = malloc(token->length + 1);
@@ -138,7 +138,7 @@ static struct Expr *parse_function_call(struct Parser *parser, struct Scanner *s
     struct ExprList *args = NULL;
 
     if (parser->current.type != TOKEN_RIGHT_PAREN) {
-        args = parse_expression_list(parser, scanner);
+        args = parse_comma_separated_expression_list(parser, scanner);
     }
     
     consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'");
@@ -206,7 +206,7 @@ static struct Expr *parse_expression(struct Parser *parser, struct Scanner *scan
     return binary_expr;
 }
 
-static struct ExprList *parse_expression_list(struct Parser *parser, struct Scanner *scanner) {
+static struct ExprList *parse_expression_list(struct Parser *parser, struct Scanner *scanner, enum TokenType separator) {
     struct ExprList *expr_list = vector_expr_list_new();
 
     while (true) {
@@ -214,7 +214,7 @@ static struct ExprList *parse_expression_list(struct Parser *parser, struct Scan
         vector_expr_list_push(expr_list, *expr);
 
         
-        if (parser->current.type != TOKEN_COMMA) {
+        if (parser->current.type != separator) {
             break;
         }
 
@@ -224,9 +224,17 @@ static struct ExprList *parse_expression_list(struct Parser *parser, struct Scan
     return expr_list;
 }
 
+static struct ExprList *parse_comma_separated_expression_list(struct Parser *parser, struct Scanner *scanner) {
+    return parse_expression_list(parser, scanner, TOKEN_COMMA);
+}
+
+static struct ExprList *parse_and_separated_expression_list(struct Parser *parser, struct Scanner *scanner) {
+    return parse_expression_list(parser, scanner, TOKEN_AND);
+}
+
 static struct SelectStatement *parse_select(struct Parser *parser, struct Scanner *scanner) {
     consume(parser, scanner, TOKEN_SELECT, "Expected 'SELECT'.");
-    struct ExprList *select_expr_list = parse_expression_list(parser, scanner);
+    struct ExprList *select_expr_list = parse_comma_separated_expression_list(parser, scanner);
 
     consume(parser, scanner, TOKEN_FROM, "Expected 'FROM'");
 
@@ -237,7 +245,7 @@ static struct SelectStatement *parse_select(struct Parser *parser, struct Scanne
     struct ExprList *where_expr_list = NULL;
     if (parser->current.type == TOKEN_WHERE) {
         advance(parser, scanner);
-        where_expr_list = parse_expression_list(parser, scanner);
+        where_expr_list = parse_comma_separated_expression_list(parser, scanner);
         fprintf(stderr, "Where has %d expression\n", (int)where_expr_list->count);
     }
     
@@ -305,7 +313,6 @@ struct Columns *parse_create(struct Parser *parser, const char *source, struct T
 
 static struct Columns *parse_indexed_column(struct Parser *parser, struct Scanner *scanner) {
     struct Columns *columns = vector_columns_new();
-    fprintf(stderr, "Columns capacity: %zu\n", columns->capacity);
 
     if (parser->current.type != TOKEN_IDENTIFIER) {
         fprintf(stderr, "Expected column-name.");
@@ -317,7 +324,9 @@ static struct Columns *parse_indexed_column(struct Parser *parser, struct Scanne
     vector_columns_push(columns, column);
     advance(parser, scanner);
 
-    while (parser->current.type == TOKEN_DOT) {
+    print_unterminated_string_to_stderr(&column.name);
+
+    while (parser->current.type == TOKEN_COMMA) {
         advance(parser, scanner);
         if (parser->current.type != TOKEN_IDENTIFIER) {
             fprintf(stderr, "Expected column-name.");
@@ -330,6 +339,8 @@ static struct Columns *parse_indexed_column(struct Parser *parser, struct Scanne
 
         vector_columns_push(columns, column);
         advance(parser, scanner);
+
+        print_unterminated_string_to_stderr(&column.name);
     }
 
     return columns;

@@ -205,3 +205,8 @@ Data structures we will need
 Common Operations
     - Read PageHeader   -> Read Cell Pointer Array
     - Read Cell         -> Read RecordHeader            -> Read RecordBody
+
+
+Mermaid diagram for planning stage
+
+https://mermaid.live/edit#pako:eNqNVF2PmzAQ_CuWn9o0F0EI-UBVperaSpX6cGpOqlQhIcdsiHvGRrZRcnfNf7-FJAQIqsoDYM_u7Ows5pVynQKNKJfM2i-CZYblsSJ4rUECd2vHHOSgHJlMPpEHyRSJSIEPJVRGCqPTkoON1SmnZrnJfD2B1fWB75gho63ReeLYRkIL-noozA9hHRnZmiCRuBjE9zsw0IKP3fq1ynbRauPxuQDi8Nba32gtiYKDe_dT70fve2Q1zce_d3fksVK65uwG-CakA9Pf_ZxlBjLsvg88GP0HGxNadQU3_B3VpVAumCaOGK1dUrCsLd2KF6ihfcJLY7Xpt7UVxrqEa5kIm2CYSG-mUA8gUSyHQRtPzd0YSUZ8J2Q6mNJ0_u-sq8pUq-HiV6v-U8DVw1E1MQPwi8kn1B8RvVe2H6Qx6LtK4VDhRVWHySGiey3LXFmMsnwHObuUO5tThZwPRUtUC2w-Wjw1BlLB0ZzmuFztGubp4i0qdgEaqpZfw1y9gBZZ57TdBOuOCRtt8FvCqnRMMyNSGjlTwpjmYHJWLWk9rZg6NAtiGuFrysxTTGN1xJyCqd9a55c0o8tsR6MtkxZXZZFiS-efUBMCOCVzr0vlaDRdLvyahEav9EAjPwgm3iqcBp7vTcNg5c3H9Bm3l-Fk5i_9EF_C2Xy5CI9j-lLX9SZzH9fLxXTm-eEqmIXHN38vjm4
