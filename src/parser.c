@@ -2,6 +2,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include <stdlib.h>
+#include <assert.h>
 
 #include "token.h"
 #include "lexer.h"
@@ -11,6 +12,95 @@
 #include "ast.h"
 #include "sql_utils.h"
 #include "memory.h"
+
+void parser_init(struct Parser *parser) {
+    parser->head    = 0;
+    parser->count   = 0;
+}
+
+static struct Token *previous_token(struct Parser *parser) {
+    return &parser->previous;
+}
+
+static void error_at(struct Parser *parser, struct Token *token, const char *message) {
+    parser->panic_mode = true;
+    fprintf(stderr, "[line %d] Error", token->line);
+
+    if (token->type == TOKEN_EOF) {
+        fprintf(stderr, " at end");
+    } else if (token->type == TOKEN_ERROR) {
+        // Nothing.
+    } else {
+        fprintf(stderr, " at '%.*s'", token->length, token->start);
+    }
+
+    fprintf(stderr, ": %s\n", message);
+    parser->had_error = true;
+    exit(1);
+}
+
+static void error_at_current(struct Parser *parser, const char* message) {
+    error_at(parser, &parser->current, message);
+}
+
+static void error(struct Parser *parser, const char* message) {
+    error_at(parser, previous_token(parser), message);
+}
+
+static inline bool is_buffer_empty(struct Parser *parser) {
+    return parser->count == 0;
+}
+
+static inline bool is_buffer_full(struct Parser *parser) {
+    return parser->count == TOKEN_BUFFER_SIZE;
+}
+
+static struct Token consume_next_token_from_buffer(struct Parser *parser) {
+    assert(!is_buffer_empty(parser));
+    size_t idx = parser->head;
+    parser->head = (parser->head + 1) % TOKEN_BUFFER_SIZE;
+    parser->count--;
+    return parser->buffer[idx];
+}
+
+static void write_token_into_buffer(struct Parser *parser, struct Token token) {
+    assert(!is_buffer_full(parser));
+    size_t idx = (parser->head + parser->count) % TOKEN_BUFFER_SIZE;
+    parser->buffer[idx] = token;
+    parser->count++;
+}
+
+static void read_n_tokens_into_buffer(struct Parser *parser, struct Scanner *scanner, size_t n) {
+    assert(n <= TOKEN_BUFFER_SIZE - parser->count);
+
+    for (size_t i = 0; i < n;) {
+        struct Token next_token = scan_token(scanner);
+        if (next_token.type != TOKEN_ERROR) {
+            write_token_into_buffer(parser, next_token);
+            i++;
+        } else {
+            error_at_current(parser, parser->current.start);
+        }
+
+    }
+}
+
+static void ensure_buffer_has_n_tokens(struct Parser *parser, struct Scanner *scanner, size_t n) {
+    assert(n <= TOKEN_BUFFER_SIZE);
+
+    if (parser->count >= n) {
+        return;
+    }
+
+    size_t diff = n - parser->count;
+    read_n_tokens_into_buffer(parser, scanner, diff);
+}
+
+static struct Token *peek(struct Parser *parser, struct Scanner *scanner, size_t n) {
+    ensure_buffer_has_n_tokens(parser, scanner, n);
+    size_t idx = (parser->head + n - 1) % TOKEN_BUFFER_SIZE;
+    return &parser->buffer[idx];
+}
 
 static struct ExprList *parse_comma_separated_expression_list(struct Parser *parser, struct Scanner *scanner);
 
@@ -88,41 +178,21 @@ static struct SelectStatement *make_select_statement(
     return stmt;
 }
 
-static void error_at(struct Parser *parser, struct Token *token, const char *message) {
-    parser->panic_mode = true;
-    fprintf(stderr, "[line %d] Error", token->line);
-
-    if (token->type == TOKEN_EOF) {
-        fprintf(stderr, " at end");
-    } else if (token->type == TOKEN_ERROR) {
-        // Nothing.
-    } else {
-        fprintf(stderr, " at '%.*s'", token->length, token->start);
-    }
-
-    fprintf(stderr, ": %s\n", message);
-    parser->had_error = true;
-    exit(1);
-}
-
-static void error_at_current(struct Parser *parser, const char* message) {
-    error_at(parser, &parser->current, message);
-}
-
-static void error(struct Parser *parser, const char* message) {
-    error_at(parser, &parser->previous, message);
-}
-
 static void advance(struct Parser *parser, struct Scanner *scanner) {
     parser->previous = parser->current;
 
     for (;;) {
-        parser->current = scan_token(scanner);
+        if (!is_buffer_empty(parser)) {
+            parser->current = consume_next_token_from_buffer(parser);
+        } else {
+            parser->current = scan_token(scanner);
+        }
         if (parser->current.type != TOKEN_ERROR) break;
 
         error_at_current(parser, parser->current.start);
     }
 }
+
 
 static void consume(struct Parser *parser, struct Scanner *scanner, enum TokenType type, const char *message) {
     if (parser->current.type == type) {
@@ -157,11 +227,12 @@ static struct Expr *parse_term(struct Parser *parser, struct Scanner *scanner) {
 
             // Look ahead to decide meaning
             if (parser->current.type == TOKEN_LEFT_PAREN) {
-                char *function_name = get_token_string(&parser->previous);
+                char *function_name = get_token_string(previous_token(parser));
                 return parse_function_call(parser, scanner, function_name);
             }
 
-            return make_column_expr(parser->previous.start, parser->previous.length);
+            struct Token *previous = previous_token(parser);
+            return make_column_expr(previous->start, previous->length);
 
         case TOKEN_STRING:
             return make_string_expr(parser);
@@ -192,9 +263,11 @@ static struct Expr *parse_expression(struct Parser *parser, struct Scanner *scan
             binary_expr = make_binary_expr(BIN_GREATER, expr_left);
             break;
 
-        default:
-            expr_left->text = (struct UnterminatedString){ .start = start, .len = (size_t)(parser->previous.start + parser->previous.length - start)};
+        default: {
+            struct Token *previous = previous_token(parser);
+            expr_left->text = (struct UnterminatedString){ .start = start, .len = (size_t)(previous->start + previous->length - start)};
             return expr_left;
+        }
             
     }
 
@@ -202,7 +275,8 @@ static struct Expr *parse_expression(struct Parser *parser, struct Scanner *scan
     struct Expr *expr_right = parse_term(parser, scanner);
 
     binary_expr->binary.right = expr_right;
-    binary_expr->text = (struct UnterminatedString){ .start = start, .len = (size_t)(parser->previous.start + parser->previous.length - start)};
+    struct Token *previous = previous_token(parser);
+    binary_expr->text = (struct UnterminatedString){ .start = start, .len = (size_t)(previous->start + previous->length - start)};
     return binary_expr;
 }
 
@@ -232,6 +306,28 @@ static struct ExprList *parse_and_separated_expression_list(struct Parser *parse
     return parse_expression_list(parser, scanner, TOKEN_AND);
 }
 
+// parse_result_column(struct Parser *parser, struct Scanner *scanner) {
+//     if (parser->current.type == TOKEN_STAR) {
+
+//     } else if 
+// }
+
+// parse_result_columns(struct Parser *parser, struct Scanner *scanner) {
+
+// }
+
+// parse_select_core(struct Parser *parser, struct Scanner *scanner) {
+//     consume(parser, scanner, TOKEN_SELECT, "Expected 'SELECT'.");
+
+//     if (parser->current.type == TOKEN_DISTINCT) {
+//         advance(parser, scanner);
+//     } else if (parser->current.type == TOKEN_ALL) {
+//         advance(parser, scanner);
+//     }
+
+
+// }
+
 static struct SelectStatement *parse_select(struct Parser *parser, struct Scanner *scanner) {
     consume(parser, scanner, TOKEN_SELECT, "Expected 'SELECT'.");
     struct ExprList *select_expr_list = parse_comma_separated_expression_list(parser, scanner);
@@ -240,7 +336,7 @@ static struct SelectStatement *parse_select(struct Parser *parser, struct Scanne
 
     consume(parser, scanner, TOKEN_IDENTIFIER, "Expected 'Table Identifier'.");
 
-    char *from_table = get_token_string(&parser->previous);
+    char *from_table = get_token_string(previous_token(parser));
 
     struct ExprList *where_expr_list = NULL;
     if (parser->current.type == TOKEN_WHERE) {

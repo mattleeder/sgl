@@ -55,8 +55,10 @@ int command_sql(struct Pager *pager, const char *command) {
     fprintf(stderr, "Parsing SQL statement\n");
 
     struct Parser parser;
+    parser_init(&parser);
     
     struct TriePool *reserved_words_pool = init_reserved_words();
+    fprintf(stderr, "RW inited\n");
 
     struct SelectStatement *select_stmt = parse(&parser, command, reserved_words_pool);
     print_select_statement_to_stderr(select_stmt, 4);

@@ -69,6 +69,7 @@ uint32_t get_root_page_of_first_matching_index(struct Pager *pager, char *table_
     struct Cell cell;
     struct SchemaRecord schema_record;
     struct Parser parser_create_index;
+    parser_init(&parser_create_index);
 
     for (int i = 0; i < number_of_tables; i++) {
 
@@ -127,6 +128,7 @@ struct IndexColumnsArray *get_all_indexes_for_table(struct Pager *pager, char* t
     
     for (int i = 0; i < page_header.number_of_cells; i++) {
         struct Parser parser_create_index;
+        parser_init(&parser_create_index);
         uint16_t offset = cell_offsets[i];
         read_cell_and_schema_record(pager, &page_header, &cell, offset, &record);
 

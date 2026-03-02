@@ -11,7 +11,8 @@ The upper bound for the amount of nodes we need
 is the sum of all the string lengths
 */
 #define MAX_NODES       (1000)
-#define ALPHABET_SIZE   (26)
+#define ALPHABET_SIZE   (27)
+#define UNDERSCORE      (26)
 #define EMPTY_CHILD     (-1)
 
 struct Trie {
@@ -59,9 +60,11 @@ static int char_to_index(char c) {
         return c - 'a';
     } else if (c >= 'A' && c <= 'Z') {
         return c - 'A';
+    } else if (c == '_') {
+        return UNDERSCORE;
     }
 
-    fprintf(stderr, "Character is not alphabetic\n");
+    fprintf(stderr, "Character %c is not alphabetic\n", c);
     return -1;
 }
 

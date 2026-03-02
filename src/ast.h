@@ -91,6 +91,15 @@ DEFINE_VECTOR(struct Expr, ExprList, expr_list)
 DEFINE_VECTOR(struct ExprBinary, BinaryExprList, binary_expr_list)
 
 // Select Statement
+enum StatementType {
+    STMT_SELECT
+};
+
+struct SQLStatement {
+    enum StatementType type;
+    bool explain;
+    
+};
 
 struct SelectStatement {
     char            *from_table;
