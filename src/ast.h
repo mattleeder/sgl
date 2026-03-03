@@ -133,4 +133,215 @@ void get_column_from_expression(struct Expr *expr, struct HashMap *columns);
 struct HashMap *get_columns_from_expression_list(struct ExprList *expr_list);
 struct IndexComparisonArray *get_index_comparisons(struct ExprList *expr_list);
 
+enum LiteralType {
+    LITERAL_NUMBER,
+    LITERAL_STRING,
+    LITERAL_NULL,
+    LITERAL_CURRENT_TIME,
+    LITERAL_CURRENT_DATE,
+    LITERAL_CURRENT_TIMESTAMP,
+    LITERAL_BOOLEAN,
+    LITERAL_BLOB
+};
+
+struct LiteralNumber {
+    int64_t value;
+};
+
+struct LiteralString {
+    struct UnterminatedString value;
+};
+
+struct LiteralBoolean {
+    bool    value;
+};
+
+struct LiteralBlob {
+    uint8_t *value;
+    size_t  length;
+};
+
+struct NewExprLiteral {
+    enum LiteralType            type;
+    struct UnterminatedString   text;
+
+    union {
+        struct LiteralNumber            number;
+        struct LiteralString            string;
+        struct LiteralBoolean           boolean;
+        struct LiteralBlob              blob;
+    };
+};
+
+struct NewExprBind {
+    bool tag;
+};
+
+struct NewExprName {
+    struct UnterminatedString name;
+};
+
+enum SortType {
+    SORT_NONE,
+    SORT_ASC,
+    SORT_DESC
+};
+
+enum CollationType {
+    COLLATE_NONE
+};
+
+enum NullsPosition {
+    NULLS_NONE,
+    NULLS_FIRST,
+    NULLS_LAST
+};
+
+struct OrderByClause {
+    enum SortType       sort_type;
+    enum CollateType    collate_type;
+    enum NullsPosition  nulls_position;
+    struct NewExpr *expr;
+};
+
+struct FilterClause {
+    struct NewExpr *expr;
+};
+
+enum FrameType { 
+    FRAME_RANGE,
+    FRAME_ROWS,
+    FRAME_GROUPS 
+};
+
+enum FrameBoundType { 
+    FB_UNBOUNDED_PRECEDING,
+    FB_CURRENT_ROW,
+    FB_N_PRECEDING,
+    FB_N_FOLLOWING,
+    FB_UNBOUNDED_FOLLOWING 
+};
+
+enum FrameExclude { 
+    EXCLUDE_NO_OTHERS, 
+    EXCLUDE_CURRENT_ROW, 
+    EXCLUDE_GROUP, 
+    EXCLUDE_TIES 
+};
+
+struct FrameBound {
+    enum FrameBoundType type;
+    struct NewExpr  *offset; // If FB_N_PRECEDING or FB_N_FOLLOWING
+};
+
+struct FrameSpec {
+    enum FrameType      type;
+    struct FrameBound   start;
+    struct FrameBound   end;             // default FB_CURRENT_ROW
+    enum FrameExclude   exclude;         // default EXCLUDE_NO_OTHERS
+};
+
+struct OverClause {
+    // Simple form
+    struct UnterminatedString *referenced_window;
+
+    // Inline form: OVER ( ... )
+    struct UnterminatedString   *base_window;
+    struct NewExprList          *partition_by;
+    struct OrderByClauseList    *order_by;
+    struct FrameSpec            *frame_spec;
+};
+
+struct NewExprFunctionArgs {
+    bool distinct;
+    bool star;
+
+    struct NewExprList      *exprs;
+    struct OrderByClause    *order_by;
+};
+
+struct NewExprFunction {
+    struct UnterminatedString   name;
+    struct NewExprFunctionArgs  *args;
+
+    struct FilterClause         *filter;
+    struct OverClause           *over;
+    
+    struct UnterminatedString   text;
+};
+
+enum CastType {
+    TYPE_BLOB,
+    TYPE_INTEGER,
+    TYPE_NULL,
+    TYPE_REAL,
+    TYPE_TEXT
+};
+
+struct NewExprCast {
+    struct NewExpr *expr;
+    enum CastType   cast_type;
+};
+
+struct NewExprSubQuery {
+    struct SelectStatement *subquery;
+};
+
+struct NewExprExists {
+    struct SelectStatement *subquery;
+};
+
+struct CaseClause {
+    struct NewExpr *when;
+    struct NewExpr *then;
+};
+
+struct NewExprCase {
+    struct NewExpr          *first_expr;
+    struct CaseClauseList   *clauses;
+    struct NewExpr          *else_expr;
+};
+
+struct NewExprRaise {
+    bool tag;
+};
+
+
+enum NewExprType {
+    EXPR_LITERAL,
+    EXPR_BIND,
+    EXPR_NAME,
+    EXPR_FUNCTION,
+    EXPR_CAST,
+    EXPR_SUBQUERY,
+    EXPR_EXISTS,
+    EXPR_CASE,
+    EXPR_RAISE
+};
+
+struct PrimaryExpr {
+    enum ExprType               type;
+    struct UnterminatedString   text;
+
+    union {
+        struct NewExprLiteral   *literal;
+        struct NewExprBind      *bind;
+        struct NewExprName      *name;
+        struct NewExprFunction  *function;
+        struct NewExprCast      *cast;
+        struct NewExprSubQuery  *subquery;
+        struct NewExprExists    *exists;
+        struct NewExprCase      *expr_case;
+        struct NewExprRaise     *raise;
+    };
+};
+
+struct NewExpr {
+    bool tag;
+};
+
+DEFINE_VECTOR(struct NewExpr *, NewExprPtrList, new_expr_ptr_list)
+DEFINE_VECTOR(struct CaseClause, CaseClauseList, case_clause_list)
+DEFINE_VECTOR(struct OrderByClause *, OrderByClausePtrList, order_by_clause_ptr_list)
+
 #endif

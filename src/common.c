@@ -1,6 +1,7 @@
 #include <stdbool.h>
 #include <string.h>
 #include <stdio.h>
+#include <stdlib.h>
 
 #include "common.h"
 
@@ -36,4 +37,14 @@ bool unterminated_string_greater_than(const struct UnterminatedString *a, const 
 
 void print_unterminated_string_to_stderr(const struct UnterminatedString *string) {
     fprintf(stderr, "%.*s\n", (int)string->len, string->start);
+}
+
+struct UnterminatedString *new_unterminated_string() {
+    struct UnterminatedString *string = malloc(sizeof(struct UnterminatedString));
+    if (!string) {
+        fprintf(stderr, "new_unterminated_string: failed to malloc *string.\n");
+        exit(1);
+    }
+
+    return string;
 }

@@ -26,6 +26,7 @@ const char *token_to_string(enum TokenType token) {
         case TOKEN_LESS_EQUAL:        return "TOKEN_LESS_EQUAL";
 
         // Literals
+        case TOKEN_BLOB:            return "TOKEN_BLOB";
         case TOKEN_IDENTIFIER:      return "TOKEN_IDENTIFIER";
         case TOKEN_NUMBER:          return "TOKEN_NUMBER";
         case TOKEN_STRING:          return "TOKEN_STRING";
@@ -47,6 +48,7 @@ const char *token_to_string(enum TokenType token) {
         case TOKEN_BEFORE:                return "TOKEN_BEFORE";
         case TOKEN_BEGIN:                 return "TOKEN_BEGIN";
         case TOKEN_BETWEEN:               return "TOKEN_BETWEEN";
+        case TOKEN_BLOB_KEYWORD:          return "TOKEN_BLOB_KEYWORD";
         case TOKEN_BY:                    return "TOKEN_BY";
         case TOKEN_CASCADE:               return "TOKEN_CASCADE";
         case TOKEN_CASE:                  return "TOKEN_CASE";
@@ -83,6 +85,7 @@ const char *token_to_string(enum TokenType token) {
         case TOKEN_EXISTS:                return "TOKEN_EXISTS";
         case TOKEN_EXPLAIN:               return "TOKEN_EXPLAIN";
         case TOKEN_FAIL:                  return "TOKEN_FAIL";
+        case TOKEN_FALSE:                 return "TOKEN_FALSE";
         case TOKEN_FILTER:                return "TOKEN_FILTER";
         case TOKEN_FIRST:                 return "TOKEN_FIRST";
         case TOKEN_FOLLOWING:             return "TOKEN_FOLLOWING";
@@ -105,6 +108,7 @@ const char *token_to_string(enum TokenType token) {
         case TOKEN_INNER:                 return "TOKEN_INNER";
         case TOKEN_INSERT:                return "TOKEN_INSERT";
         case TOKEN_INSTEAD:               return "TOKEN_INSTEAD";
+        case TOKEN_INTEGER:               return "TOKEN_INTEGER";
         case TOKEN_INTERSECT:             return "TOKEN_INTERSECT";
         case TOKEN_INTO:                  return "TOKEN_INTO";
         case TOKEN_IS:                    return "TOKEN_IS";
@@ -124,6 +128,7 @@ const char *token_to_string(enum TokenType token) {
         case TOKEN_NOTNULL:               return "TOKEN_NOTNULL";
         case TOKEN_NULL:                  return "TOKEN_NULL";
         case TOKEN_NULLS:                 return "TOKEN_NULLS";
+        case TOKEN_NUMERIC:               return "TOKEN_NUMERIC";
         case TOKEN_OF:                    return "TOKEN_OF";
         case TOKEN_OFFSET:                return "TOKEN_OFFSET";
         case TOKEN_ON:                    return "TOKEN_ON";
@@ -140,6 +145,7 @@ const char *token_to_string(enum TokenType token) {
         case TOKEN_QUERY:                 return "TOKEN_QUERY";
         case TOKEN_RAISE:                 return "TOKEN_RAISE";
         case TOKEN_RANGE:                 return "TOKEN_RANGE";
+        case TOKEN_REAL:                  return "TOKEN_REAL";
         case TOKEN_RECURSIVE:             return "TOKEN_RECURSIVE";
         case TOKEN_REFERENCES:            return "TOKEN_REFERENCES";
         case TOKEN_REGEXP:                return "TOKEN_REGEXP";
@@ -159,11 +165,13 @@ const char *token_to_string(enum TokenType token) {
         case TOKEN_TABLE:                 return "TOKEN_TABLE";
         case TOKEN_TEMP:                  return "TOKEN_TEMP";
         case TOKEN_TEMPORARY:             return "TOKEN_TEMPORARY";
+        case TOKEN_TEXT:                  return "TOKEN_TEXT";
         case TOKEN_THEN:                  return "TOKEN_THEN";
         case TOKEN_TIES:                  return "TOKEN_TIES";
         case TOKEN_TO:                    return "TOKEN_TO";
         case TOKEN_TRANSACTION:           return "TOKEN_TRANSACTION";
         case TOKEN_TRIGGER:               return "TOKEN_TRIGGER";
+        case TOKEN_TRUE:                  return "TOKEN_TRUE";
         case TOKEN_UNBOUNDED:             return "TOKEN_UNBOUNDED";
         case TOKEN_UNION:                 return "TOKEN_UNION";
         case TOKEN_UNIQUE:                return "TOKEN_UNIQUE";

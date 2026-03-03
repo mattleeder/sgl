@@ -24,6 +24,7 @@ static const struct ReservedWord reserved_words[] = {
     { .word = "BEFORE",            .type = TOKEN_BEFORE            },
     { .word = "BEGIN",             .type = TOKEN_BEGIN             },
     { .word = "BETWEEN",           .type = TOKEN_BETWEEN           },
+    { .word = "BLOB",              .type = TOKEN_BLOB_KEYWORD      },
     { .word = "BY",                .type = TOKEN_BY                },
     { .word = "CASCADE",           .type = TOKEN_CASCADE           },
     { .word = "CASE",              .type = TOKEN_CASE              },
@@ -60,6 +61,7 @@ static const struct ReservedWord reserved_words[] = {
     { .word = "EXISTS",            .type = TOKEN_EXISTS            },
     { .word = "EXPLAIN",           .type = TOKEN_EXPLAIN           },
     { .word = "FAIL",              .type = TOKEN_FAIL              },
+    { .word = "FALSE",             .type = TOKEN_FALSE             },
     { .word = "FILTER",            .type = TOKEN_FILTER            },
     { .word = "FIRST",             .type = TOKEN_FIRST             },
     { .word = "FOLLOWING",         .type = TOKEN_FOLLOWING         },
@@ -82,6 +84,7 @@ static const struct ReservedWord reserved_words[] = {
     { .word = "INNER",             .type = TOKEN_INNER             },
     { .word = "INSERT",            .type = TOKEN_INSERT            },
     { .word = "INSTEAD",           .type = TOKEN_INSTEAD           },
+    { .word = "INTEGER",           .type = TOKEN_INTEGER           },
     { .word = "INTERSECT",         .type = TOKEN_INTERSECT         },
     { .word = "INTO",              .type = TOKEN_INTO              },
     { .word = "IS",                .type = TOKEN_IS                },
@@ -101,6 +104,7 @@ static const struct ReservedWord reserved_words[] = {
     { .word = "NOTNULL",           .type = TOKEN_NOTNULL           },
     { .word = "NULL",              .type = TOKEN_NULL              },
     { .word = "NULLS",             .type = TOKEN_NULLS             },
+    { .word = "NUMERIC",           .type = TOKEN_NUMERIC           },
     { .word = "OF",                .type = TOKEN_OF                },
     { .word = "OFFSET",            .type = TOKEN_OFFSET            },
     { .word = "ON",                .type = TOKEN_ON                },
@@ -117,6 +121,7 @@ static const struct ReservedWord reserved_words[] = {
     { .word = "QUERY",             .type = TOKEN_QUERY             },
     { .word = "RAISE",             .type = TOKEN_RAISE             },
     { .word = "RANGE",             .type = TOKEN_RANGE             },
+    { .word = "REAL",              .type = TOKEN_REAL              },
     { .word = "RECURSIVE",         .type = TOKEN_RECURSIVE         },
     { .word = "REFERENCES",        .type = TOKEN_REFERENCES        },
     { .word = "REGEXP",            .type = TOKEN_REGEXP            },
@@ -136,11 +141,13 @@ static const struct ReservedWord reserved_words[] = {
     { .word = "TABLE",             .type = TOKEN_TABLE             },
     { .word = "TEMP",              .type = TOKEN_TEMP              },
     { .word = "TEMPORARY",         .type = TOKEN_TEMPORARY         },
+    { .word = "TEXT",              .type = TOKEN_TEXT              },
     { .word = "THEN",              .type = TOKEN_THEN              },
     { .word = "TIES",              .type = TOKEN_TIES              },
     { .word = "TO",                .type = TOKEN_TO                },
     { .word = "TRANSACTION",       .type = TOKEN_TRANSACTION       },
     { .word = "TRIGGER",           .type = TOKEN_TRIGGER           },
+    { .word = "TRUE",              .type = TOKEN_TRUE              },
     { .word = "UNBOUNDED",         .type = TOKEN_UNBOUNDED         },
     { .word = "UNION",             .type = TOKEN_UNION             },
     { .word = "UNIQUE",            .type = TOKEN_UNIQUE            },
@@ -256,7 +263,6 @@ static struct Token string(struct Scanner *scanner, char terminator) {
 
     // The closing quote.
     advance(scanner);
-    fprintf(stderr, "TOKEN_STRING: %.*s\n", (int)(scanner->current - scanner->start), scanner->start);
     return make_token(scanner, TOKEN_STRING);
 }
 
@@ -293,9 +299,49 @@ static bool is_alpha(char c) {
             c == '_';
 }
 
+static bool is_hex(char c) {
+    if (is_digit(c)) return true;
+    return  (c >= 'a' && c <= 'f') ||
+            (c >= 'A' && c <= 'F');
+}
+
 static struct Token identifier(struct Scanner *scanner) {
     while (is_alpha(peek(scanner)) || is_digit(peek(scanner))) advance(scanner);
     return make_token(scanner, identifier_type(scanner));
+}
+
+static struct Token quoted_identifier(struct Scanner *scanner) {
+    // @TODO: may need to handle escaping via "" (2 double quotes)
+    while (!is_at_end(scanner) && peek(scanner) != '\"') advance(scanner);
+    if (peek(scanner) != '\"') return error_token(scanner, "Unterminated quoted identifier.");
+    struct Token token = make_token(scanner, TOKEN_IDENTIFIER);
+
+    // Trim quotes off token
+    token.start++;
+    token.length -= 2;
+
+    advance(scanner); // Consume closing '\"'
+    return token;
+}
+
+static struct Token blob(struct Scanner *scanner) {
+    advance(scanner);   // Move past 'x' or 'X'
+    advance(scanner);   // Move past '\''
+
+    size_t char_count = 0;
+
+    while (is_hex(peek(scanner))) {
+        advance(scanner);
+        char_count++;
+    }
+
+    if (peek(scanner) != '\'') return error_token(scanner, "Unterminated blob.");
+    
+    advance(scanner);  // Consume closing '\''
+
+    if (char_count % 2 != 0) return error_token(scanner, "Odd number of hex characters.");
+
+    return make_token(scanner, TOKEN_BLOB);
 }
 
 struct Token scan_token(struct Scanner *scanner) {
@@ -305,6 +351,7 @@ struct Token scan_token(struct Scanner *scanner) {
     if (is_at_end(scanner)) return make_token(scanner, TOKEN_EOF);
 
     char c = advance(scanner);
+    if ((c == 'x' || c == 'X') && peek(scanner) == '\'') return blob(scanner);
     if (is_alpha(c)) return identifier(scanner);
     if (is_digit(c)) return number(scanner);
 
@@ -333,8 +380,10 @@ struct Token scan_token(struct Scanner *scanner) {
             match(scanner, '=') ? TOKEN_GREATER_EQUAL : TOKEN_GREATER);
             
         case '\'':
-        case '\"':
         return string(scanner, c);
+
+        case '\"':
+        return quoted_identifier(scanner);
     }
 
     char *buffer = malloc(32);
@@ -349,9 +398,7 @@ struct Token scan_token(struct Scanner *scanner) {
 
 void tokenize(struct Scanner *scanner, const char* source) {
     struct TriePool *pool = init_reserved_words();
-    fprintf(stderr, "Initialised reserved words\n");
     init_scanner(scanner, source, pool);
-    fprintf(stderr, "Scanner is at %p\n", scanner->start);
     int line = -1;
 
     for (;;) {
@@ -367,5 +414,4 @@ void tokenize(struct Scanner *scanner, const char* source) {
         if (token.type == TOKEN_EOF) break;
     }
 
-    fprintf(stderr, "Tokenization complete\n");
 }

@@ -26,11 +26,18 @@ enum TokenType {
     TOKEN_LESS_EQUAL, 
 
     // Literals
+    TOKEN_BLOB,
     TOKEN_IDENTIFIER,
     TOKEN_NUMBER,
     TOKEN_STRING,
 
     // Keywords
+
+    TOKEN_TEXT,
+    TOKEN_NUMERIC,
+    TOKEN_INTEGER,
+    TOKEN_REAL,
+    TOKEN_BLOB_KEYWORD,
     TOKEN_ABORT,
     TOKEN_ACTION,
     TOKEN_ADD,
@@ -60,9 +67,9 @@ enum TokenType {
     TOKEN_CREATE,
     TOKEN_CROSS,
     TOKEN_CURRENT,
-    TOKEN_CURRENT_DATE,
-    TOKEN_CURRENT_TIME,
-    TOKEN_CURRENT_TIMESTAMP,
+    TOKEN_CURRENT_DATE,             // Literal
+    TOKEN_CURRENT_TIME,             // Literal
+    TOKEN_CURRENT_TIMESTAMP,        // Literal
     TOKEN_DATABASE,
     TOKEN_DEFAULT,
     TOKEN_DEFERRABLE,
@@ -83,6 +90,7 @@ enum TokenType {
     TOKEN_EXISTS,
     TOKEN_EXPLAIN,
     TOKEN_FAIL,
+    TOKEN_FALSE,    // Literal
     TOKEN_FILTER,
     TOKEN_FIRST,
     TOKEN_FOLLOWING,
@@ -164,6 +172,7 @@ enum TokenType {
     TOKEN_TO,
     TOKEN_TRANSACTION,
     TOKEN_TRIGGER,
+    TOKEN_TRUE,         // Literal
     TOKEN_UNBOUNDED,
     TOKEN_UNION,
     TOKEN_UNIQUE,
