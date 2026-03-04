@@ -727,6 +727,7 @@ static struct NewExprLiteral *parse_literal(struct Parser *parser, struct Scanne
         case TOKEN_TEXT:
 
 static enum CastType parse_type_name(struct Parser *parser, struct Scanner *scanner) {
+    // @TODO: does not match sqlite type-name
     enum CastType type;
 
     switch (parser->current.type) {
@@ -1152,6 +1153,58 @@ static struct FrameSpec *parse_frame_spec(struct Parser *parser, struct Scanner 
     return frame_spec;
 }
 
+static struct WindowDefinition *new_window_definition() {
+    struct WindowDefinition *definition = malloc(sizeof(struct WindowDefinition));
+    if (!definition) {
+        fprintf(stderr, "new_window_definition: failed to malloc *definition.\n");
+        exit(1);
+    }
+
+    definition->base_window       = NULL;
+    definition->partition_by      = NULL;
+    definition->order_by          = NULL;
+    definition->frame_spec        = NULL;
+
+    return definition;
+}
+
+static struct WindowDefinition *parse_window_definition(struct Parser *parser, struct Scanner *scanner) {
+    struct WindowDefinition *definition = new_window_definition();
+
+    // Check for base-window-name
+    if (parser->current.type == TOKEN_IDENTIFIER) {
+        definition->base_window = new_unterminated_string();
+
+        definition->base_window->start    = parser->current.start;
+        definition->base_window->len      = parser->current.length;
+
+        advance(parser, scanner);
+    }
+
+    if (parser->current.type == TOKEN_PARTITION) {
+        advance(parser, scanner);
+        consume(parser, scanner, TOKEN_BY, "Expected 'BY'.");
+        definition->partition_by = collect_expressions(parser, scanner);
+    }
+
+    if (parser->current.type == TOKEN_ORDER) {
+        advance(parser, scanner);
+        consume(parser, scanner, TOKEN_BY, "Expected 'BY'.");
+        definition->order_by = collect_order_by_clauses(parser, scanner);
+    }
+
+    if (parser->current.type == TOKEN_RANGE ||
+        parser->current.type == TOKEN_ROWS ||
+        parser->current.type == TOKEN_GROUPS)
+        {
+            definition->frame_spec = parse_frame_spec(parser, scanner);
+        }
+
+    consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
+
+    return definition;
+}
+
 static struct OverClause *new_over_clause() {
     struct OverClause *over = malloc(sizeof(struct OverClause));
     if (!over) {
@@ -1159,21 +1212,18 @@ static struct OverClause *new_over_clause() {
         exit(1);
     }
 
-    over->referenced_window = NULL;
-    over->base_window       = NULL;
-    over->partition_by      = NULL;
-    over->order_by          = NULL;
-    over->frame_spec        = NULL;
-
     return over;
 }
 
 static struct OverClause *parse_over_clause(struct Parser *parser, struct Scanner *scanner) {
+    consume(parser, scanner, TOKEN_OVER, "Expected 'OVER'.");
+
     struct OverClause *over = new_over_clause();
 
     if (parser->current.type == TOKEN_IDENTIFIER) {
-        over->referenced_window = new_unterminated_string();
+        over->type = OVER_REFERENCED;
         
+        over->referenced_window = new_unterminated_string();
         over->referenced_window->start  = parser->current.start;
         over->referenced_window->len    = parser->current.length;
 
@@ -1183,36 +1233,8 @@ static struct OverClause *parse_over_clause(struct Parser *parser, struct Scanne
 
     consume(parser, scanner, TOKEN_LEFT_PAREN, "Expected '('.");
 
-    // Check for base-window-name
-    if (parser->current.type == TOKEN_IDENTIFIER) {
-        over->base_window = new_unterminated_string();
-
-        over->base_window->start    = parser->current.start;
-        over->base_window->len      = parser->current.length;
-
-        advance(parser, scanner);
-    }
-
-    if (parser->current.type == TOKEN_PARTITION) {
-        advance(parser, scanner);
-        consume(parser, scanner, TOKEN_BY, "Expected 'BY'.");
-        over->partition_by = collect_expressions(parser, scanner);
-    }
-
-    if (parser->current.type == TOKEN_ORDER) {
-        advance(parser, scanner);
-        consume(parser, scanner, TOKEN_BY, "Expected 'BY'.");
-        over->order_by = collect_order_by_clauses(parser, scanner);
-    }
-
-    if (parser->current.type == TOKEN_RANGE ||
-        parser->current.type == TOKEN_ROWS ||
-        parser->current.type == TOKEN_GROUPS)
-        {
-            over->frame_spec = parse_frame_spec(parser, scanner);
-        }
-
-    consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
+    over->type          = OVER_INLINE;
+    over->inline_window = parse_window_definition(parser, scanner);
 
     return over;
 }
@@ -1254,6 +1276,765 @@ static struct NewExprFunction *parse_function(struct Parser *parser, struct Scan
     }
 
     return function;
+}
+
+static struct QualifiedName *new_qualified_name() {
+    struct QualifiedName *name = malloc(sizeof(struct QualifiedName));
+    if (!name) {
+        fprintf(stderr, "new_qualified_name: failed to malloc *name.\n");
+        exit(1);
+    }
+
+    name->count = 0;
+    for (size_t i = 0; i < QUALIFIED_NAME_PARTS; i++) {
+        name->parts[i] = (struct UnterminatedString){ .start = NULL, .len = 0 };
+    }
+
+    return name;
+}
+
+static struct QualifiedName *parse_name(struct Parser *parser, struct Scanner *scanner) {
+    struct QualifiedName *name = new_qualified_name();
+
+    if (peek(parser, scanner, 3) == TOKEN_DOT) {
+        // schema-name
+        advance(parser, scanner);
+        if (parser->current.type != TOKEN_IDENTIFIER) error_at_current(parser, "Expected identifier.");
+        struct UnterminatedString schema_name = { .start = parser->current.start, .len = parser->current.length };
+        name->parts[name->count++] = schema_name;
+        advance(parser, scanner);
+    }
+    
+    if (peek(parser, scanner, 1) == TOKEN_DOT) {
+        // table-name
+        advance(parser, scanner);
+        if (parser->current.type != TOKEN_IDENTIFIER) error_at_current(parser, "Expected identifier.");
+        struct UnterminatedString table_name = { .start = parser->current.start, .len = parser->current.length };
+        name->parts[name->count++] = table_name;
+        advance(parser, scanner);
+
+    }
+
+    // column-name
+    if (parser->current.type != TOKEN_IDENTIFIER) error_at_current(parser, "Expected identifier.");
+    struct UnterminatedString column_name = { .start = parser->current.start, .len = parser->current.length };
+    name->parts[name->count++] = column_name;
+    advance(parser, scanner);
+
+    return name;
+}
+
+static struct NewExprGrouping *new_expr_grouping() {
+    struct NewExprGrouping *group = malloc(sizeof(struct NewExprGrouping));
+    if (!group) {
+        fprintf(stderr, "new_expr_grouping: failed to malloc *group.\n");
+        exit(1);
+    }
+
+    return group;
+}
+
+static struct NewExprGrouping *parse_grouping(struct Parser *parser, struct Scanner *scanner) {
+    struct NewExprGrouping *group = new_expr_grouping();
+    group->inner = parse_expression_new(parser, scanner);
+    return group;
+}
+
+static struct NewExprRaise *new_raise_expr() {
+    struct NewExprRaise *raise = malloc(sizeof(struct NewExprRaise));
+    if (!raise) {
+        fprintf(stderr, "new_raise_expr: failed to malloc *raise.\n");
+        exit(1);
+    }
+
+    raise->expr = NULL;
+
+    return raise;
+}
+
+static struct NewExprRaise *parse_raise_expr(struct Parser *parser, struct Scanner *scanner) {
+    consume(parser, scanner, TOKEN_RAISE, "Expected 'RAISE'.");
+    consume(parser, scanner, TOKEN_LEFT_PAREN, "Expected '('.");
+
+    struct NewExprRaise *raise = new_raise_expr();
+
+    switch (parser->current.type) {
+
+        case TOKEN_IGNORE:
+            raise->type = RAISE_IGNORE;
+            break;
+
+        case TOKEN_ROLLBACK:
+            consume(parser, scanner, TOKEN_COMMA, "Expected ','.");
+            raise->type = RAISE_ROLLBACK;
+            raise->expr = parse_expression_new(parser, scanner);
+            break;
+
+        case TOKEN_ABORT:
+            raise->type = RAISE_ABORT;
+            break;
+
+        case TOKEN_FAIL:
+            raise->type = RAISE_FAIL;
+            break;
+
+        default:
+            error_at_current(parser, "Expected 'IGNORE', 'ROLLBACK', 'ABORT' or 'FAIL'.");
+    }
+
+    consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
+
+    return raise;
+}
+
+static struct ResultColumn *new_result_column() {
+    struct ResultColumn *result_column = malloc(sizeof(struct ResultColumn));
+    if (!result_column) {
+        fprintf(stderr, "new_result_column: failed to malloc *result_columns.\n");
+        exit(1);
+    }
+
+    return result_column;
+}
+
+static struct ResultColumn *parse_result_column(struct Parser *parser, struct Scanner *scanner) {
+    struct ResultColumn *result_column = new_result_column();
+
+    if (parser->current.type == TOKEN_STAR) {
+        advance(parser, scanner);
+        result_column->type = RC_ALL;
+        return result_column;
+    }
+
+    if (parser->current.type == TOKEN_IDENTIFIER && peek(parser, scanner, 1) == TOKEN_DOT) {
+        result_column->type                         = RC_TABLE_ALL;
+        result_column->table_all.table_name.start   = parser->current.start;
+        result_column->table_all.table_name.len     = parser->current.length;
+        
+        advance(parser, scanner);
+        advance(parser, scanner);
+        consume(parser, scanner, TOKEN_STAR, "Exptected '*'.");
+        return result_column;
+    }
+
+    result_column->type         = RC_EXPR;
+    result_column->expr.expr    = parse_expression_new(parser, scanner);
+    result_column->expr.alias   = NULL;
+
+    if (parser->current.type == TOKEN_AS) {
+        advance(parser, scanner);
+        if (parser->current.type != TOKEN_IDENTIFIER) error_at_current(parser, "Exptected identifier.");
+        
+        result_column->expr.alias->start    = parser->current.start;
+        result_column->expr.alias->len      = parser->current.length;
+
+        advance(parser, scanner);
+    }
+
+    return result_column;
+}
+
+static struct ResultColumnPtrList *collect_result_columns(struct Parser *parser, struct Scanner *scanner) {
+    struct ResultColumnPtrList *result_column_ptr_list = vector_result_column_ptr_list_new();
+    struct ResultColumn *result_column = parse_result_column(parser, scanner);
+    vector_result_column_ptr_list_push(result_column_ptr_list, result_column);
+
+    while (parser->current.type == TOKEN_COMMA) {
+        advance(parser, scanner);
+        struct ResultColumn *result_column = parse_result_column(parser, scanner);
+        vector_result_column_ptr_list_push(result_column_ptr_list, result_column);
+    }
+
+    return result_column_ptr_list;
+}
+
+static void tos_parse_alias(struct Parser *parser, struct Scanner *scanner, struct TableOrSubquery *tos) {
+    if (parser->current.type == TOKEN_AS) {
+        advance(parser, scanner);
+    }
+    
+    if (parser->current.type == TOKEN_IDENTIFIER) {
+        // @TODO: are all following identifiers aliases?
+        tos->alias        = new_unterminated_string();
+        tos->alias->start = parser->current.start;
+        tos->alias->len   = parser->current.length;
+        consume(parser, scanner, TOKEN_IDENTIFIER, "Expected identifier.");
+    }
+}
+
+static struct TableName *new_table_name() {
+    struct TableName *table_name = malloc(sizeof(struct TableName));
+    if (!table_name) {
+        fprintf(stderr, "new_table_name: failed to malloc *table_name.\n");
+        exit(1);
+    }
+
+    return table_name;
+}
+
+static void *tos_parse_table_name(struct Parser *parser, struct Scanner *scanner, struct TableOrSubquery *tos) {
+    tos->type                       = TOS_TABLE_NAME;
+    tos->table_name                 = new_table_name();
+    struct TableName *table_name    = &tos->table_name;
+
+    // schema-name
+    if (peek(parser, scanner, 1) == TOKEN_DOT) {
+        advance(parser, scanner);
+        
+        table_name->schema_name         = new_unterminated_string();
+        table_name->schema_name->start  = parser->current.start;
+        table_name->schema_name->len    = parser->current.length;
+
+        consume(parser, scanner, TOKEN_IDENTIFIER, "Expected identifier.");
+    }
+
+    table_name->table_name.start     = parser->current.start;
+    table_name->table_name.len       = parser->current.length;
+
+    consume(parser, scanner, TOKEN_IDENTIFIER, "Expected identifier.");
+
+    tos_parse_alias(parser, scanner, tos);
+
+    // Check for index
+    if (parser->current.type == TOKEN_INDEXED) {
+        consume(parser, scanner, TOKEN_INDEXED, "Expected 'INDEXED'.");
+        consume(parser, scanner, TOKEN_BY, "Expected 'BY'.");
+
+        table_name->index_mode           = TABLE_INDEX_NAMED;
+        table_name->index_name           = new_unterminated_string();
+        table_name->index_name->start    = parser->current.start;
+        table_name->index_name->len      = parser->current.length;
+
+        consume(parser, scanner, TOKEN_IDENTIFIER, "Expected identifier.");
+
+    } else if (parser->current.type == TOKEN_NOT) {
+        consume(parser, scanner, TOKEN_NOT, "Expected 'NOT'.");
+        consume(parser, scanner, TOKEN_INDEXED, "Expected 'INDEXED'.");
+
+        table_name->index_mode           = TABLE_INDEX_NONE;
+        table_name->index_name           = new_unterminated_string();
+        table_name->index_name->start    = parser->current.start;
+        table_name->index_name->len      = parser->current.length;
+
+        consume(parser, scanner, TOKEN_IDENTIFIER, "Expected identifier.");
+
+    } else {
+        table_name->index_mode           = TABLE_INDEX_AUTO;
+    }
+}
+
+static struct TableFunction *new_table_function() {
+    struct TableFunction *table_function = malloc(sizeof(struct TableFunction));
+    if (!table_function) {
+        fprintf(stderr, "new_table_function: failed to malloc *table_function.\n");
+        exit(1);
+    }
+
+    return table_function;
+}
+
+static void *tos_parse_table_function(struct Parser *parser, struct Scanner *scanner, struct TableOrSubquery *tos) {
+    tos->type                               = TOS_TABLE_FUNCTION;
+    tos->table_name                         = new_table_function();
+    struct TableFunction *table_function    = &tos->table_name;
+
+    // schema-name
+    if (peek(parser, scanner, 1) == TOKEN_DOT) {
+        advance(parser, scanner);
+        
+        table_function->schema_name         = new_unterminated_string();
+        table_function->schema_name->start  = parser->current.start;
+        table_function->schema_name->len    = parser->current.length;
+
+        consume(parser, scanner, TOKEN_IDENTIFIER, "Expected identifier.");
+    }
+    
+    table_function->function_name.start  = parser->current.start;
+    table_function->function_name.len    = parser->current.length;
+
+    consume(parser, scanner, TOKEN_IDENTIFIER, "Expected identifier.");
+    consume(parser, scanner, TOKEN_LEFT_PAREN, "Expected '('.");
+
+    table_function->args = collect_expressions(parser, scanner);
+
+    consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
+
+    tos_parse_alias(parser, scanner, tos);
+
+}
+
+static struct SelectStatementNew *new_select_statement() {
+    struct SelectStatementNew *stmt = malloc(sizeof(struct SelectStatementNew));
+    if (!stmt) {
+        fprintf(stderr, "new_select_statement: failed to malloc *stmt.\n");
+        exit(1);
+    }
+
+    return stmt;
+}
+
+static struct SelectStatementNew *parse_select_statement_new(struct Parser *parser, struct Scanner *scanner) {
+    // @TODO: implement
+}
+
+
+static struct TableOrSubquery *new_table_or_subquery() {
+    struct TableOrSubquery *tos = malloc(sizeof(struct TableOrSubquery));
+    if (!tos) {
+        fprintf(stderr, "new_table_or_subquery: failed to malloc *tos.\n");
+        exit(1);
+    }
+
+    tos->alias = NULL;
+
+    return tos;
+}
+
+static struct TableOrSubquery *parse_table_or_subquery(struct Parser *parser, struct Scanner *scanner) {
+    struct TableOrSubquery *tos = new_table_or_subquery();
+
+    if (is_start_of_select(parser)) {
+        tos->type       = TOS_SUBQUERY;
+        tos->subquery   = parse_select_statement_new(parser, scanner);
+        consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
+        tos_parse_alias(parser, scanner, tos);
+        return tos;
+    }
+
+    // table-function-name(
+    if (peek(parser, scanner, 1) == TOKEN_LEFT_PAREN) {
+        tos->type           = TOS_TABLE_FUNCTION;
+        tos->table_function = tos_parse_table_function(parser, scanner, tos);
+        return tos;
+    }
+
+    // schema-name.table-function-name(
+    if (peek(parser, scanner, 1) == TOKEN_DOT &&
+        peek(parser, scanner, 3) == TOKEN_LEFT_PAREN) {
+
+        tos->type           = TOS_TABLE_FUNCTION;
+        tos->table_function = tos_parse_table_function(parser, scanner, tos);
+        return tos;
+    }
+
+    tos->type       = TOS_TABLE_NAME;
+    tos->table_name = tos_parse_table_name(parser, scanner, tos);
+
+    return tos;
+}
+
+static bool is_start_of_join_operator(struct Parser *parser) {
+    switch (parser->current.type) {
+
+        case TOKEN_COMMA:
+        case TOKEN_JOIN:
+        case TOKEN_NATURAL:
+        case TOKEN_LEFT:
+        case TOKEN_RIGHT:
+        case TOKEN_FULL:
+        case TOKEN_INNER:
+        case TOKEN_CROSS:
+            return true;
+
+        default:
+            return false;
+
+    }
+}
+
+static struct JoinData *new_join_data() {
+    struct JoinData *join_data = malloc(sizeof(struct JoinData));
+    if (!join_data) {
+        fprintf(stderr, "new_join_data: failed to malloc *join_data.\n");
+        exit(1);
+    }
+
+    join_data->natural      = false;
+    join_data->right        = NULL;
+    join_data->constraint   = NULL;
+
+    return join_data;
+}
+
+static void join_data_parse_join_operator(struct Parser *parser, struct Scanner *scanner, struct JoinData *join_data) {
+    if (parser->current.type == TOKEN_NATURAL) {
+        join_data->natural = true;
+        advance(parser, scanner);
+    }
+
+    switch (parser->current.type) {
+        case TOKEN_CROSS:
+        case TOKEN_COMMA:
+            join_data->join_operator = JO_CROSS;
+            break;
+
+        case TOKEN_LEFT:
+            join_data->join_operator = JO_LEFT_OUTER;
+            break;
+
+        case TOKEN_RIGHT:
+            join_data->join_operator = JO_RIGHT_OUTER;
+            break;
+
+        case TOKEN_FULL:
+            join_data->join_operator = JO_FULL_OUTER;
+            break;
+
+        case TOKEN_INNER:
+            join_data->join_operator = JO_INNER;
+            break;
+
+        default:
+            error_at_current(parser, "Unknown join operator.");
+    }
+
+    if (parser->current.type == TOKEN_OUTER) {
+        advance(parser, scanner);
+    }
+
+    consume(parser, scanner, TOKEN_JOIN, "Expected 'JOIN'.");
+}
+
+static struct JoinConstraint *new_join_constraint() {
+    struct JoinConstraint *join_constraint = malloc(sizeof(struct JoinConstraint));
+    if (!join_constraint) {
+        fprintf(stderr, "new_join_constraint: failed to malloc *join_constraint.\n");
+        exit(1);
+    }
+
+    return join_constraint;
+}
+
+static struct UnterminatedStringList *collect_unterminated_strings(struct Parser *parser, struct Scanner *scanner) {
+    struct UnterminatedStringList *list = vector_unterminated_string_list_new();
+    
+    struct UnterminatedString string = { .start = parser->current.start, .len = parser->current.length };
+    vector_unterminated_string_list_push(list, string);
+    advance(parser, scanner);
+
+    while (parser->current.type == TOKEN_COMMA) {
+        advance(parser, scanner);
+        struct UnterminatedString string = { .start = parser->current.start, .len = parser->current.length };
+        vector_unterminated_string_list_push(list, string);
+        advance(parser, scanner);
+    }
+}
+
+static struct JoinClause *new_join_clause() {
+    struct JoinClause *join_clause = malloc(sizeof(struct JoinClause));
+    if (!join_clause) {
+        fprintf(stderr, "new_join_clause: failed to malloc *join_clause.\n");
+        exit(1);
+    }
+
+    return join_clause;
+}
+
+static struct JoinConstraint *parse_join_constraint(struct Parser *parser, struct Scanner *scanner) {
+    struct JoinConstraint *join_constraint = NULL;
+    
+    switch (parser->current.type) {
+        case TOKEN_ON:
+            advance(parser, scanner);
+            join_constraint = new_join_constraint();
+            join_constraint->type = JOIN_CONSTRAINT_ON;
+            join_constraint->expr = parse_expression(parser, scanner);
+            break;
+
+        case TOKEN_USING:
+            advance(parser, scanner);
+            consume(parser, scanner, TOKEN_LEFT_PAREN, "Expected '('.");
+            join_constraint = new_join_constraint();
+            join_constraint->type           = JOIN_CONSTRAINT_USING;
+            join_constraint->column_names   = collect_unterminated_strings(parser, scanner);
+            consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
+            break;
+    }
+
+    return join_constraint;
+}
+
+static struct JoinClause *parse_join_clause(struct Parser *parser, struct Scanner *scanner) {
+    struct JoinClause *join_clause = new_join_clause();
+
+    join_clause->left   = parse_table_expression(parser, scanner);
+    join_clause->joins  = vector_join_data_ptr_list_new();
+
+    while (is_start_of_join_operator(parser)) {
+        struct JoinData *join_data = new_join_data();
+
+        // parse join-operator
+        join_data_parse_join_operator(parser, scanner, join_data);
+
+        // parse table-or-subquery
+        join_data->right = parse_table_expression(parser, scanner);
+
+        // parse join-constraint
+        join_data->constraint = parse_join_constraint(parser, scanner);
+
+        if (join_data->natural && join_data->constraint != NULL) {
+            fprintf(stderr, "join_data->constraint should be NULL if join_data->natural == true.\n");
+            exit(1);
+        }        
+    }
+}
+
+static struct TableExpression *new_table_expression() {
+    struct TableExpression *table = malloc(sizeof(struct TableExpression));
+    if (!table) {
+        fprintf(stderr, "new_table_expression: failed ");
+        exit(1);
+    }
+
+    return table;
+}
+
+static struct TableExpression *parse_table_expression(struct Parser *parser, struct Scanner *scanner) {
+    struct TableExpression *table = new_table_expression();
+
+    if (parser->current.type == TOKEN_IDENTIFIER) {
+        table->type     = TE_SIMPLE;
+        table->simple   = parse_table_or_subquery(parser, scanner);
+        return table;
+    }
+
+    consume(parser, scanner, TOKEN_LEFT_PAREN, "Expected '('.");
+
+    if (is_start_of_select(parser)) {
+        table->type     = TE_SIMPLE;
+        table->simple   = parse_table_or_subquery(parser, scanner);
+        consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
+        return table;
+    }
+
+    // Join clause
+    // Either explicit or comma separated list for cross joins
+    table->type = TE_JOIN;
+    table->join = parse_join_clause(parser, scanner);
+
+    return table;    
+}
+
+static struct FromClause *new_from_clause() {
+    struct FromClause *from = malloc(sizeof(struct FromClause));
+    if (!from) {
+        fprintf(stderr, "new_from_clause: failed to malloc *from.");
+        exit(1);
+    }
+
+    return from;
+}
+
+static struct FromClause *parse_from_clause(struct Parser *parser, struct Scanner *scanner) {
+    consume(parser, scanner, TOKEN_FROM, "Expected 'FROM'.");
+    struct FromClause *from = new_from_clause();
+    // Join clause can have a standalone table
+    from->tables = parse_join_clause(parser, scanner);
+    return from;
+}
+
+static struct WhereClause *new_where_clause() {
+    struct WhereClause *where = malloc(sizeof(struct WhereClause));
+    if (!where) {
+        fprintf(stderr, "new_where_clause: failed to malloc *where.\n");
+        exit(1);
+    }
+
+    return where;
+}
+
+static struct WhereClause *parse_where_clause(struct Parser *parser, struct Scanner *scanner) {
+    consume(parser, scanner, TOKEN_WHERE, "Expected 'WHERE'.");
+    struct WhereClause *where = new_where_clause();
+    where->expr = parse_expression_new(parser, scanner);
+    return where;
+}
+
+static struct GroupByClause *new_group_by_clause() {
+    struct GroupByClause *group_by = malloc(sizeof(struct GroupByClause));
+    if (!group_by) {
+        fprintf(stderr, "new_group_by_clause: failed to malloc *group_by.\n");
+        exit(1);
+    }
+
+    return group_by;
+}
+
+static struct GroupByClause *parse_group_by(struct Parser *parser, struct Scanner *scanner) {
+    consume(parser, scanner, TOKEN_GROUP, "Expected 'GROUP'.");
+    consume(parser, scanner, TOKEN_BY, "Expected 'BY'.");
+    struct GroupByClause *group_by = new_group_by_clause();
+    group_by->expr_ptr_list = collect_expressions(parser, scanner);
+    return group_by;
+}
+
+static struct HavingClause *new_having_clause() {
+    struct HavingClause *having = malloc(sizeof(struct HavingClause));
+    if (!having) {
+        fprintf(stderr, "new_having_clause: failed to malloc *having.\n");
+        exit(1);
+    }
+
+    return having;
+}
+
+static struct HavingClause *parse_having_clause(struct Parser *parser, struct Scanner *scanner) {
+    consume(parser, scanner, TOKEN_HAVING, "Expected 'HAVING'");
+    struct HavingClause *having = new_having_clause();
+    having->expr = parse_expression_new(parser, scanner);
+    return having;
+}
+
+static struct WindowData *new_window_data() {
+    struct WindowData *window_data = malloc(sizeof(struct WindowData));
+    if (!window_data) {
+        fprintf(stderr, "new_window_data: failed to malloc *window_data.\n");
+        exit(1);
+    }
+
+    return window_data;
+}
+
+static struct WindowData *parse_window_data(struct Parser *parser, struct Scanner *scanner) {
+    struct WindowData *window_data = new_window_data();
+
+    window_data->name.start = parser->current.start;
+    window_data->name.len   = parser->current.length;
+
+    consume(parser, scanner, TOKEN_IDENTIFIER, "Expected identifier.");
+    consume(parser, scanner, TOKEN_AS, "Expected 'AS'.");
+
+    window_data->definition = parse_window_definition(parser, scanner);
+
+    return window_data;
+}
+
+static struct WindowDataPtrList *collect_window_data(struct Parser *parser, struct Scanner *scanner) {
+    struct WindowDataPtrList *window_data_ptr_list = vector_window_data_ptr_list_new();
+    struct WindowData *window_data = parse_window_data(parser, scanner);
+    vector_window_data_ptr_list_push(window_data_ptr_list, window_data);
+
+    while (parser->current.type == TOKEN_COMMA) {
+        advance(parser, scanner);
+        struct WindowData *window_data = parse_window_data(parser, scanner);
+        vector_window_data_ptr_list_push(window_data_ptr_list, window_data);
+    }
+
+    return window_data_ptr_list;
+}
+
+static struct WindowClause *new_window_clause() {
+    struct WindowClause *window_clause = malloc(sizeof(struct WindowClause));
+    if (!window_clause) {
+        fprintf(stderr, "new_window_clause: failed to malloc *window_clause");
+        exit(1);
+    }
+
+    return window_clause;
+}
+
+static struct WindowClause *parse_window_clause(struct Parser *parser, struct Scanner *scanner) {
+    consume(parser, scanner, TOKEN_WINDOW, "Expected 'WINDOW'.");
+    struct WindowClause *window_clause = new_window_clause();
+
+    window_clause->window_list = collect_window_data(parser, scanner);
+
+    return window_clause;
+}
+
+static struct NewExprPtrListPtrList *collect_values(struct Parser *parser, struct Scanner *scanner) {
+    consume(parser, scanner, TOKEN_LEFT_PAREN, "Expected '('.");
+
+    struct NewExprPtrListPtrList *list_of_lists = vector_new_expr_ptr_list_ptr_list_new();
+    struct NewExprPtrList *list = collect_expressions(parser, scanner);
+    vector_new_expr_ptr_list_ptr_list_push(list_of_lists, list);
+
+    consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
+
+    while (parser->current.type == TOKEN_COMMA) {
+        advance(parser, scanner);
+        consume(parser, scanner, TOKEN_LEFT_PAREN, "Expected '('.");
+
+        struct NewExprPtrList *list = collect_expressions(parser, scanner);
+        vector_new_expr_ptr_list_ptr_list_push(list_of_lists, list);
+
+        consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
+    }
+
+    return list_of_lists;
+}
+
+static struct SelectCore *new_select_core() {
+    struct SelectCore *select_core = malloc(sizeof(struct SelectCore));
+    if (!select_core) {
+        fprintf(stderr, "new_select_core: failed to malloc *select_core.\n");
+        exit(1);
+    }
+
+    select_core->select.distinct    = false;
+    select_core->select.from        = NULL;
+    select_core->select.where       = NULL;
+    select_core->select.group_by    = NULL;
+    select_core->select.having      = NULL;
+    select_core->select.window      = NULL;
+    select_core->values.values      = NULL;
+
+    return select_core;
+}
+
+static struct SelectCore *parse_select_core(struct Parser *parser, struct Scanner *scanner) {
+    struct SelectCore *select_core = new_select_core();
+
+    if (parser->current.type == TOKEN_VALUES) {
+        advance(parser, scanner);
+        consume(parser, scanner, TOKEN_LEFT_PAREN, "Expected '('.");
+
+        select_core->type           = SC_VALUES;
+        select_core->values.values  = collect_values(parser, scanner);
+
+        consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
+        return select_core;
+    }
+    
+    consume(parser, scanner, TOKEN_SELECT, "Expected 'SELECT'.");
+    select_core->type = SC_SELECT;
+
+    if (parser->current.type == TOKEN_DISTINCT) {
+        select_core->select.distinct = true;
+        advance(parser, scanner);
+    } else if (parser->current.type == TOKEN_ALL) {
+        advance(parser, scanner);
+    }
+
+    select_core->select.result_columns = collect_result_columns(parser, scanner);
+
+    if (parser->current.type == TOKEN_FROM) {
+        select_core->select.from = parse_from_clause(parser, scanner);
+    }
+
+    if (parser->current.type == TOKEN_WHERE) {
+        select_core->select.where = parse_from_clause(parser, scanner);
+    }
+
+    if (parser->current.type == TOKEN_GROUP) {
+        select_core->select.group_by = parse_group_by(parser, scanner);
+        
+        if (parser->current.type == TOKEN_HAVING) {
+            select_core->select.having = parse_having_clause(parser, scanner);
+        }
+    }
+
+    if (parser->current.type == TOKEN_WINDOW) {
+        select_core->select.window = parse_window_clause(parser, scanner);
+    }
+
+    return select_core;
+}
+
+static bool is_start_of_select(struct Parser *parser) {
+    return  parser->current.type == TOKEN_WITH
+            || parser->current.type == TOKEN_SELECT
+            || parser->current.type == TOKEN_VALUES;
 }
 
 static struct PrimaryExpr *parse_primary_expression(struct Parser *parser, struct Scanner *scanner) {
@@ -1298,19 +2079,27 @@ static struct PrimaryExpr *parse_primary_expression(struct Parser *parser, struc
                 expr->function  = parse_function(parser, scanner);
             } else {
                 // schema-name or table-name or column-name
+                expr->type = EXPR_NAME;
+                expr->name = parse_name(parser, scanner);
             }
+
             break;
 
         case TOKEN_LEFT_PAREN: // Can have both (expr) and (select-stmt)
-            if (peek(parser, scanner, 1)->type == TOKEN_WITH
-                || peek(parser, scanner, 1)->type == TOKEN_SELECT
-                || peek(parser, scanner, 1)->type == TOKEN_VALUES) 
+            advance(parser, scanner);
+            if (is_start_of_select(parser))
                 {
+                // @TODO
                 // select-stmt
                 }
-            else {
-                // expr-list
+            else if (peek(parser, scanner, 1) == TOKEN_COMMA){
+                // row value expr
+            } else {
+                // single expr
+                expr->type      = EXPR_GROUPING;
+                expr->grouping  = parse_grouping(parser, scanner);
             }
+            consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
             break;
 
         case TOKEN_NOT:
@@ -1323,6 +2112,8 @@ static struct PrimaryExpr *parse_primary_expression(struct Parser *parser, struc
             break;
 
         case TOKEN_RAISE:
+            expr->type  = EXPR_RAISE;
+            expr->raise = parse_raise_function(parser, scanner);
             break;
 
         default:
@@ -1375,9 +2166,7 @@ static struct NewExpr *parse_expression_new(struct Parser *parser, struct Scanne
             break;
 
         case TOKEN_LEFT_PAREN: // Can have both (expr) and (select-stmt)
-            if (peek(parser, scanner, 1)->type == TOKEN_WITH
-                || peek(parser, scanner, 1)->type == TOKEN_SELECT
-                || peek(parser, scanner, 1)->type == TOKEN_VALUES) 
+            if (is_start_of_select(parser)) 
                 {
                 // select-stmt
                 }
@@ -1402,31 +2191,3 @@ static struct NewExpr *parse_expression_new(struct Parser *parser, struct Scanne
             error_at_current(parser, "Expected Primary Expression");
     }
 }
-
-parse_result_column(struct Parser *parser, struct Scanner *scanner) {
-    if (parser->current.type == TOKEN_STAR) {
-        // Only star
-    } else if (peek(parser, scanner, 2) == TOKEN_STAR) {
-        // TableName.star
-    } else {
-        // Expr
-        // Possibly AS
-        // Possibly column-alias
-    }
-}
-
-// parse_result_columns(struct Parser *parser, struct Scanner *scanner) {
-
-// }
-
-// parse_select_core(struct Parser *parser, struct Scanner *scanner) {
-//     consume(parser, scanner, TOKEN_SELECT, "Expected 'SELECT'.");
-
-//     if (parser->current.type == TOKEN_DISTINCT) {
-//         advance(parser, scanner);
-//     } else if (parser->current.type == TOKEN_ALL) {
-//         advance(parser, scanner);
-//     }
-
-
-// }

@@ -177,10 +177,6 @@ struct NewExprBind {
     bool tag;
 };
 
-struct NewExprName {
-    struct UnterminatedString name;
-};
-
 enum SortType {
     SORT_NONE,
     SORT_ASC,
@@ -241,15 +237,25 @@ struct FrameSpec {
     enum FrameExclude   exclude;         // default EXCLUDE_NO_OTHERS
 };
 
-struct OverClause {
-    // Simple form
-    struct UnterminatedString *referenced_window;
-
-    // Inline form: OVER ( ... )
+struct WindowDefinition {
     struct UnterminatedString   *base_window;
     struct NewExprList          *partition_by;
     struct OrderByClauseList    *order_by;
     struct FrameSpec            *frame_spec;
+};
+
+enum OverClauseType {
+    OVER_REFERENCED,
+    OVER_INLINE
+};
+
+struct OverClause {
+    enum OverClauseType type;
+    
+    union {
+        struct UnterminatedString   *referenced_window;
+        struct WindowDefinition     *inline_window;
+    };
 };
 
 struct NewExprFunctionArgs {
@@ -270,6 +276,12 @@ struct NewExprFunction {
     struct UnterminatedString   text;
 };
 
+#define QUALIFIED_NAME_PARTS (3)
+struct QualifiedName {
+    size_t count;
+    struct UnterminatedString parts[QUALIFIED_NAME_PARTS];
+};
+
 enum CastType {
     TYPE_BLOB,
     TYPE_INTEGER,
@@ -287,6 +299,14 @@ struct NewExprSubQuery {
     struct SelectStatement *subquery;
 };
 
+struct NewExprRowValue {
+    struct NewExprPtrList elements;
+};
+
+struct NewExprGrouping {
+    struct NewExpr *inner;
+};
+
 struct NewExprExists {
     struct SelectStatement *subquery;
 };
@@ -302,10 +322,185 @@ struct NewExprCase {
     struct NewExpr          *else_expr;
 };
 
-struct NewExprRaise {
-    bool tag;
+enum RaiseType {
+    RAISE_IGNORE,
+    RAISE_ROLLBACK,
+    RAISE_ABORT,
+    RAISE_FAIL
 };
 
+struct NewExprRaise {
+    enum RaiseType type;
+    struct NewExpr *expr; // If RAISE_ROLLBACK
+};
+
+enum ResultColumnType {
+    RC_EXPR,
+    RC_ALL,
+    RC_TABLE_ALL
+};
+
+struct ResultColumn {
+    enum ResultColumnType       type;
+
+    union {
+        struct { // If RC_EXPR
+            struct NewExpr              *expr;
+            struct UnterminatedString   *alias; // Optional
+        } expr;
+        
+        struct { // If RC_TABLE_ALL
+            struct UnterminatedString   table_name;
+        } table_all;
+
+        // RC_ALL has no additional data
+    };
+};
+
+enum TableIndexMode {
+    TABLE_INDEX_AUTO,
+    TABLE_INDEX_NAMED,
+    TABLE_INDEX_NONE
+};
+
+struct TableName {
+    enum TableIndexMode         index_mode;
+    struct UnterminatedString   table_name;
+    struct UnterminatedString   *schema_name; // Optional
+    struct UnterminatedString   *index_name;  // Optional
+};
+
+struct TableFunction {
+    struct UnterminatedString   function_name;
+    struct NewExprPtrList       *args;
+    struct UnterminatedString   *schema_name; // Optional
+};
+
+enum TableOrSubqueryType {
+    TOS_TABLE_NAME,
+    TOS_TABLE_FUNCTION,
+    TOS_SUBQUERY
+};
+
+
+struct TableOrSubquery {
+    enum TableOrSubqueryType    type;
+    struct UnterminatedString   *alias;
+
+    union {
+        struct TableName            *table_name;
+        struct TableFunction        *table_function;
+        struct SelectStatementNew   *subquery;
+    };
+
+};
+
+enum JoinConstraintType {
+    JOIN_CONSTRAINT_ON,
+    JOIN_CONSTRAINT_USING
+};
+
+struct JoinConstraint {
+    enum JoinConstraintType type;
+
+    union {
+        struct NewExpr                  *expr;
+        struct UnterminatedStringList   *column_names;
+    };
+
+};
+
+enum JoinOperatorType {
+    JO_CROSS,
+    JO_INNER,
+    JO_LEFT_OUTER,
+    JO_RIGHT_OUTER,
+    JO_FULL_OUTER
+};
+
+struct JoinData {
+    bool natural;   // If true then constrain must be NULL
+
+    enum JoinOperatorType   join_operator;
+    struct TableExpression  *right;
+    struct JoinConstraint   *constraint;
+};
+
+struct JoinClause {
+    struct TableExpression  *left;
+    struct JoinDataPtrList  *joins;
+};
+
+enum TableExprType {
+    TE_SIMPLE,
+    TE_JOIN
+};
+
+struct TableExpression {
+    enum TableExprType type;
+
+    union {
+        struct TableOrSubquery          *simple;
+        struct JoinClause               *join;
+    };
+
+};
+
+struct FromClause {
+    struct JoinClause *tables; // Join clause can have standalone table
+};
+
+struct WhereClause {
+    struct NewExpr *expr;
+};
+
+struct GroupByClause {
+    struct NewExprPtrList *expr_ptr_list;
+};
+
+struct HavingClause {
+    struct NewExpr *expr;
+};
+
+struct WindowData {
+    struct UnterminatedString   name;
+    struct WindowDefinition     *definition;
+};
+
+struct WindowClause {
+    struct WindowDataPtrList *window_list;
+};
+
+enum SelectCoreType {
+    SC_SELECT,
+    SC_VALUES
+};
+
+struct SelectCore {
+    enum SelectCoreType type;
+
+    union {
+
+        struct {
+            struct NewExprPtrListPtrList *values;
+        } values;
+
+        struct {
+            bool distinct;
+            struct ResultColumnPtrList *result_columns;
+            struct FromClause       *from;
+            struct WhereClause      *where;
+            struct GroupByClause    *group_by;
+            struct HavingClause     *having;
+            struct WindowClause     *window;
+        } select;
+
+    };
+};
+
+struct SelectStatementNew {
+    bool tag;
+};
 
 enum NewExprType {
     EXPR_LITERAL,
@@ -314,9 +509,11 @@ enum NewExprType {
     EXPR_FUNCTION,
     EXPR_CAST,
     EXPR_SUBQUERY,
+    EXPR_ROW_VALUE,
+    EXPR_GROUPING,
     EXPR_EXISTS,
     EXPR_CASE,
-    EXPR_RAISE
+    EXPR_RAISE,
 };
 
 struct PrimaryExpr {
@@ -326,10 +523,12 @@ struct PrimaryExpr {
     union {
         struct NewExprLiteral   *literal;
         struct NewExprBind      *bind;
-        struct NewExprName      *name;
+        struct QualifiedName    *name;
         struct NewExprFunction  *function;
         struct NewExprCast      *cast;
         struct NewExprSubQuery  *subquery;
+        struct NewExprRowValue  *row_value;
+        struct NewExprGrouping  *grouping;
         struct NewExprExists    *exists;
         struct NewExprCase      *expr_case;
         struct NewExprRaise     *raise;
@@ -343,5 +542,10 @@ struct NewExpr {
 DEFINE_VECTOR(struct NewExpr *, NewExprPtrList, new_expr_ptr_list)
 DEFINE_VECTOR(struct CaseClause, CaseClauseList, case_clause_list)
 DEFINE_VECTOR(struct OrderByClause *, OrderByClausePtrList, order_by_clause_ptr_list)
-
+DEFINE_VECTOR(struct ResultColumn *, ResultColumnPtrList, result_column_ptr_list)
+DEFINE_VECTOR(struct TableExpression *, TableExpressionPtrList, table_expression_ptr_list)
+DEFINE_VECTOR(struct JoinData *, JoinDataPtrList, join_data_ptr_list)
+DEFINE_VECTOR(struct UnterminatedString, UnterminatedStringList, unterminated_string_list)
+DEFINE_VECTOR(struct WindowData *, WindowDataPtrList, window_data_ptr_list)
+DEFINE_VECTOR(struct NewExprPtrList *, NewExprPtrListPtrList, new_expr_ptr_list_ptr_list)
 #endif
