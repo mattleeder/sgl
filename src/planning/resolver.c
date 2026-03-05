@@ -29,7 +29,7 @@ static bool get_is_first_col_rowid(const struct Column *col) {
 static struct Columns *load_table_columns(struct Pager *pager, const char *table_name) {
     struct SchemaRecord *schema_record = get_schema_record_for_table(pager, table_name);
     struct Parser parser_create;
-    parser_init(&parser_create);
+    parser_init(&parser_create, DEFAULT_ARENA_CAPACITY);
     // Empty pool, dont care about reserved words here
     struct TriePool *reserved_words_pool = init_reserved_words();
 

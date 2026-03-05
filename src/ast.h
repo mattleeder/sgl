@@ -133,6 +133,8 @@ void get_column_from_expression(struct Expr *expr, struct HashMap *columns);
 struct HashMap *get_columns_from_expression_list(struct ExprList *expr_list);
 struct IndexComparisonArray *get_index_comparisons(struct ExprList *expr_list);
 
+struct NewExprPtrList;
+
 enum LiteralType {
     LITERAL_NUMBER,
     LITERAL_STRING,
@@ -195,7 +197,7 @@ enum NullsPosition {
 
 struct OrderByClause {
     enum SortType       sort_type;
-    enum CollateType    collate_type;
+    enum CollationType  collate_type;
     enum NullsPosition  nulls_position;
     struct NewExpr *expr;
 };
@@ -238,10 +240,10 @@ struct FrameSpec {
 };
 
 struct WindowDefinition {
-    struct UnterminatedString   *base_window;
-    struct NewExprList          *partition_by;
-    struct OrderByClauseList    *order_by;
-    struct FrameSpec            *frame_spec;
+    struct UnterminatedString       *base_window;
+    struct NewExprPtrList           *partition_by;
+    struct OrderByClausePtrList     *order_by;
+    struct FrameSpec                *frame_spec;
 };
 
 enum OverClauseType {
@@ -262,8 +264,8 @@ struct NewExprFunctionArgs {
     bool distinct;
     bool star;
 
-    struct NewExprList      *exprs;
-    struct OrderByClause    *order_by;
+    struct NewExprPtrList           *exprs;
+    struct OrderByClausePtrList     *order_by;
 };
 
 struct NewExprFunction {
@@ -295,12 +297,8 @@ struct NewExprCast {
     enum CastType   cast_type;
 };
 
-struct NewExprSubQuery {
-    struct SelectStatement *subquery;
-};
-
 struct NewExprRowValue {
-    struct NewExprPtrList elements;
+    struct NewExprPtrList *elements;
 };
 
 struct NewExprGrouping {
@@ -498,15 +496,90 @@ struct SelectCore {
     };
 };
 
+struct LimitClause {
+    struct NewExpr *limit;
+    struct NewExpr *offset; // Optional
+};
+
+enum CompoundOperatorType {
+    COMPOUND_OPERATOR_BASE,     // Used for initial core / when there is only 1 core
+    COMPOUND_OPERATOR_UNION,
+    COMPOUND_OPERATOR_UNION_ALL,
+    COMPOUND_OPERATOR_INTERSECT,
+    COMPOUND_OPERATOR_EXCEPT
+};
+
+struct SelectCoreData {
+    enum CompoundOperatorType   type;
+    struct SelectCore           *core;
+};
+
 struct SelectStatementNew {
-    bool tag;
+    struct SelectCoreDataPtrList    *cores; // Can have cores linked by compound-operators
+    struct OrderByClausePtrList     *order; // Optional
+    struct LimitClause              *limit; // Optional
+};
+
+struct NewExprCollate {
+    struct NewExpr              *expr;
+    struct UnterminatedString   collation_name;
+};
+
+enum PatternMatchType {
+    PATTERN_LIKE,
+    PATTERN_GLOB,
+    PATTERN_REGEXP,
+    PATTERN_MATCH
+};
+
+struct NewExprPatternMatch {
+    bool                    not;
+    enum PatternMatchType   type;
+    struct NewExpr          *left;
+    struct NewExpr          *right;
+
+    struct NewExpr          *escape; // Only if PATTERN_LIKE
+};
+
+struct NewExprBinary {
+    enum BinaryOp   op;
+    struct NewExpr  *left;
+    struct NewExpr  *right;
+};
+
+enum NullCompType {
+    NULL_COMP_ISNULL,
+    NULL_COMP_NOTNULL
+};
+
+struct NewExprNullComp {
+    enum NullCompType   type;
+    struct NewExpr      *expr;
+};
+
+struct NewExprIs {
+    bool            not;
+    bool            distinct;
+    struct NewExpr  *left;
+    struct NewExpr  *right;
+};
+
+struct NewExprBetween {
+    bool            not;
+    struct NewExpr  *primary;
+    struct NewExpr  *left;
+    struct NewExpr  *right;
+};
+
+struct NewExprIn {
+    bool not;
 };
 
 enum NewExprType {
     EXPR_LITERAL,
     EXPR_BIND,
     EXPR_NAME,
-    EXPR_FUNCTION,
+    EXPR_FUNC,
     EXPR_CAST,
     EXPR_SUBQUERY,
     EXPR_ROW_VALUE,
@@ -514,29 +587,46 @@ enum NewExprType {
     EXPR_EXISTS,
     EXPR_CASE,
     EXPR_RAISE,
-};
 
-struct PrimaryExpr {
-    enum ExprType               type;
-    struct UnterminatedString   text;
-
-    union {
-        struct NewExprLiteral   *literal;
-        struct NewExprBind      *bind;
-        struct QualifiedName    *name;
-        struct NewExprFunction  *function;
-        struct NewExprCast      *cast;
-        struct NewExprSubQuery  *subquery;
-        struct NewExprRowValue  *row_value;
-        struct NewExprGrouping  *grouping;
-        struct NewExprExists    *exists;
-        struct NewExprCase      *expr_case;
-        struct NewExprRaise     *raise;
-    };
+    NEW_EXPR_UNARY,
+    NEW_EXPR_BINARY,
+    NEW_EXPR_COLLATE,
+    NEW_EXPR_PATTERN_MATCH,
+    NEW_EXPR_NULL_COMP,
+    NEW_EXPR_IS,
+    NEW_EXPR_BETWEEN,
+    NEW_EXPR_IN
 };
 
 struct NewExpr {
-    bool tag;
+    enum NewExprType            type;
+    struct UnterminatedString   text;
+
+    union {
+        // Primaries
+        struct NewExprLiteral       *literal;
+        struct NewExprBind          *bind;
+        struct QualifiedName        *name;
+        struct NewExprFunction      *function;
+        struct NewExprCast          *cast;
+        struct SelectStatementNew   *subquery;
+        struct NewExprRowValue      *row_value;
+        struct NewExprGrouping      *grouping;
+        struct NewExprExists        *exists;
+        struct NewExprCase          *expr_case;
+        struct NewExprRaise         *raise;
+
+        // 
+        struct NewExprUnary         *unary;
+        struct NewExprBinary        *binary;
+        struct NewExprCollate       *collate;
+        struct NewExprPatternMatch  *pattern_match;
+        struct NewExprNullComp      *null_comp;
+        struct NewExprIs            *is;
+        struct NewExprBetween       *between;
+        struct NewExprIn            *in;
+
+    };
 };
 
 DEFINE_VECTOR(struct NewExpr *, NewExprPtrList, new_expr_ptr_list)
@@ -548,4 +638,5 @@ DEFINE_VECTOR(struct JoinData *, JoinDataPtrList, join_data_ptr_list)
 DEFINE_VECTOR(struct UnterminatedString, UnterminatedStringList, unterminated_string_list)
 DEFINE_VECTOR(struct WindowData *, WindowDataPtrList, window_data_ptr_list)
 DEFINE_VECTOR(struct NewExprPtrList *, NewExprPtrListPtrList, new_expr_ptr_list_ptr_list)
+DEFINE_VECTOR(struct SelectCoreData *, SelectCoreDataPtrList, select_core_data_ptr_list)
 #endif

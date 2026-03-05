@@ -13,8 +13,7 @@
 #include "ast.h"
 #include "sql_utils.h"
 #include "memory.h"
-
-#include <stdint.h>
+#include "arena.h"
 
 static const uint8_t char_to_decimal[128] = {
     ['0'] = 0,
@@ -41,9 +40,10 @@ static const uint8_t char_to_decimal[128] = {
     ['f'] = 15,
 };
 
-void parser_init(struct Parser *parser) {
+void parser_init(struct Parser *parser, size_t arena_capacity) {
     parser->head    = 0;
     parser->count   = 0;
+    parser->arena   = arena_new(arena_capacity);
 }
 
 static struct Token *previous_token(struct Parser *parser) {
@@ -541,6 +541,10 @@ struct CreateIndexStatement *parse_create_index(struct Parser *parser, const cha
 // true
 // false
 // blob-literal
+static struct NewExpr *parse_expression_new(struct Parser *parser, struct Scanner *scanner);
+static struct TableExpression *parse_table_expression(struct Parser *parser, struct Scanner *scanner);
+static struct SelectCore *parse_select_core(struct Parser *parser, struct Scanner *scanner);
+
 #define CASE_LITERAL                        \
         case TOKEN_NUMBER:                  \
         case TOKEN_STRING:                  \
@@ -669,54 +673,60 @@ struct LiteralBlob hex_string_to_bytes(const char *str, size_t len) {
 
 static struct NewExprLiteral *parse_literal(struct Parser *parser, struct Scanner *scanner) {
     struct UnterminatedString text = { .start = parser->current.start, .len = parser->current.length };
+    struct NewExprLiteral *literal = NULL;
     switch (parser->current.type) {
 
         case TOKEN_NUMBER: {
             int64_t value = string_to_int(parser->current.start, parser->current.length);
-            return make_literal_number(value, text);
+            literal = make_literal_number(value, text);
             break;
         }
             
-        case TOKEN_STRING:
+        case TOKEN_STRING: {
             // Cut off start and end quotes
             struct UnterminatedString value = { .start = parser->current.start + 1, .len = parser->current.length - 2};
-            return make_literal_string(value, text);
+            literal = make_literal_string(value, text);
             break;
+        }
 
         case TOKEN_NULL:
-            return make_literal_null(text);
+            literal = make_literal_null(text);
             break;
 
         case TOKEN_CURRENT_TIME:
-            return make_literal_current_time(text);
+            literal = make_literal_current_time(text);
             break;
 
         case TOKEN_CURRENT_DATE:
-            return make_literal_current_date(text);
+            literal = make_literal_current_date(text);
             break;
 
         case TOKEN_CURRENT_TIMESTAMP:
-            return make_literal_current_timestamp(text);
+            literal = make_literal_current_timestamp(text);
             break;
 
         case TOKEN_TRUE:
-            return make_literal_boolean(true, text);
+            literal = make_literal_boolean(true, text);
             break;
 
         case TOKEN_FALSE:
-            return make_literal_boolean(false, text);
+            literal = make_literal_boolean(false, text);
             break;
 
-        case TOKEN_BLOB:
+        case TOKEN_BLOB: {
             // Cut off starting X' and ending '
             struct LiteralBlob value = hex_string_to_bytes(parser->current.start + 2, parser->current.length - 3);       
-            return make_literal_blob(value.start, value.len, text);
+            literal = make_literal_blob(value.value, value.length, text);
             break;
+        }
 
         default:
             fprintf(stderr, "parse_literal: unknown type %d\n", parser->current.type);
             error_at_current(parser, "Unknown type");
     }
+
+    advance(parser, scanner);
+    return literal;
 }
 
 #define CASE_TYPE_NAME              \
@@ -760,7 +770,7 @@ static enum CastType parse_type_name(struct Parser *parser, struct Scanner *scan
     return type;
 }
 
-static struct NewExprCast *new_cast_expr(struct Parser *parser, struct Scanner *scanner) {
+static struct NewExprCast *new_cast_expr() {
     struct NewExprCast *cast_expr = malloc(sizeof(struct NewExprCast));
     if (!cast_expr) {
         fprintf(stderr, "new_cast_expr: Failed to malloc *cast_expr.\n");
@@ -780,7 +790,7 @@ static struct NewExprCast *parse_cast(struct Parser *parser, struct Scanner *sca
     enum CastType cast_type = parse_type_name(parser, scanner);
     consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'");
 
-    struct NewExprCast *cast_expr = new_cast_expr(parser, scanner);
+    struct NewExprCast *cast_expr = new_cast_expr();
 
     cast_expr->expr         = expr;
     cast_expr->cast_type    = cast_type;
@@ -791,7 +801,7 @@ static struct NewExprCast *parse_cast(struct Parser *parser, struct Scanner *sca
 static struct NewExprCase *new_expr_case() {
     struct NewExprCase *expr_case = malloc(sizeof(struct NewExprCase));
     if (!expr_case) {
-        fprint(stderr, "new_expr_case: failed to malloc *case.\n");
+        fprintf(stderr, "new_expr_case: failed to malloc *case.\n");
         exit(1);
     }
 
@@ -833,16 +843,6 @@ static struct NewExprCase *parse_case(struct Parser *parser, struct Scanner *sca
     case_expr->else_expr    = else_expr;
 
     return case_expr;
-}
-
-static struct PrimaryExpr *new_primary_expr() {
-    struct PrimaryExpr *expr = malloc(sizeof(struct PrimaryExpr));
-    if (!expr) {
-        fprintf(stderr, "new_primary_expr: failed to malloc *expr.\n");
-        exit(1);
-    }
-
-    return expr;
 }
 
 static struct OrderByClause *new_order_by_clause() {
@@ -989,7 +989,7 @@ static struct FilterClause *parse_filter_clause(struct Parser *parser, struct Sc
     consume(parser, scanner, TOKEN_LEFT_PAREN, "Expected '('.");
     consume(parser, scanner, TOKEN_WHERE, "Expected 'WHERE'.");
 
-    filter->expr = parse_expression(parser, scanner);
+    filter->expr = parse_expression_new(parser, scanner);
 
     consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
 
@@ -1109,8 +1109,8 @@ static struct FrameSpec *parse_frame_spec(struct Parser *parser, struct Scanner 
             default:
                 frame_spec->start.offset = parse_expression_new(parser, scanner);
                 consume(parser, scanner, TOKEN_PRECEDING, "Expected 'PRECEDING'.");
-                frame_spec->start.offset = FB_N_PRECEDING;
-                frame_spec->end.offset   = FB_CURRENT_ROW;
+                frame_spec->start.type = FB_N_PRECEDING;
+                frame_spec->end.type   = FB_CURRENT_ROW;
                 break;
         }
     }
@@ -1296,7 +1296,7 @@ static struct QualifiedName *new_qualified_name() {
 static struct QualifiedName *parse_name(struct Parser *parser, struct Scanner *scanner) {
     struct QualifiedName *name = new_qualified_name();
 
-    if (peek(parser, scanner, 3) == TOKEN_DOT) {
+    if (peek(parser, scanner, 3)->type == TOKEN_DOT) {
         // schema-name
         advance(parser, scanner);
         if (parser->current.type != TOKEN_IDENTIFIER) error_at_current(parser, "Expected identifier.");
@@ -1305,7 +1305,7 @@ static struct QualifiedName *parse_name(struct Parser *parser, struct Scanner *s
         advance(parser, scanner);
     }
     
-    if (peek(parser, scanner, 1) == TOKEN_DOT) {
+    if (peek(parser, scanner, 1)->type == TOKEN_DOT) {
         // table-name
         advance(parser, scanner);
         if (parser->current.type != TOKEN_IDENTIFIER) error_at_current(parser, "Expected identifier.");
@@ -1406,7 +1406,7 @@ static struct ResultColumn *parse_result_column(struct Parser *parser, struct Sc
         return result_column;
     }
 
-    if (parser->current.type == TOKEN_IDENTIFIER && peek(parser, scanner, 1) == TOKEN_DOT) {
+    if (parser->current.type == TOKEN_IDENTIFIER && peek(parser, scanner, 1)->type == TOKEN_DOT) {
         result_column->type                         = RC_TABLE_ALL;
         result_column->table_all.table_name.start   = parser->current.start;
         result_column->table_all.table_name.len     = parser->current.length;
@@ -1472,13 +1472,13 @@ static struct TableName *new_table_name() {
     return table_name;
 }
 
-static void *tos_parse_table_name(struct Parser *parser, struct Scanner *scanner, struct TableOrSubquery *tos) {
+static void tos_parse_table_name(struct Parser *parser, struct Scanner *scanner, struct TableOrSubquery *tos) {
     tos->type                       = TOS_TABLE_NAME;
     tos->table_name                 = new_table_name();
-    struct TableName *table_name    = &tos->table_name;
+    struct TableName *table_name    = tos->table_name;
 
     // schema-name
-    if (peek(parser, scanner, 1) == TOKEN_DOT) {
+    if (peek(parser, scanner, 1)->type == TOKEN_DOT) {
         advance(parser, scanner);
         
         table_name->schema_name         = new_unterminated_string();
@@ -1533,13 +1533,13 @@ static struct TableFunction *new_table_function() {
     return table_function;
 }
 
-static void *tos_parse_table_function(struct Parser *parser, struct Scanner *scanner, struct TableOrSubquery *tos) {
+static void tos_parse_table_function(struct Parser *parser, struct Scanner *scanner, struct TableOrSubquery *tos) {
     tos->type                               = TOS_TABLE_FUNCTION;
-    tos->table_name                         = new_table_function();
-    struct TableFunction *table_function    = &tos->table_name;
+    tos->table_function                     = new_table_function();
+    struct TableFunction *table_function    = tos->table_function;
 
     // schema-name
-    if (peek(parser, scanner, 1) == TOKEN_DOT) {
+    if (peek(parser, scanner, 1)->type == TOKEN_DOT) {
         advance(parser, scanner);
         
         table_function->schema_name         = new_unterminated_string();
@@ -1563,6 +1563,53 @@ static void *tos_parse_table_function(struct Parser *parser, struct Scanner *sca
 
 }
 
+#define CASE_COMPOUND_OPERATOR      \
+        case TOKEN_UNION:           \
+        case TOKEN_INTERSECT:       \
+        case TOKEN_EXCEPT:
+
+static bool is_compound_operator(struct Parser *parser) {
+    switch (parser->current.type) {
+        CASE_COMPOUND_OPERATOR
+            return true;
+
+        default:
+            return false;
+    }
+}
+
+static struct LimitClause *new_limit_clause() {
+    struct LimitClause *limit = malloc(sizeof(struct LimitClause));
+    if (!limit) {
+        fprintf(stderr, "new_limit_clause: failed to malloc *limit.\n");
+        exit(1);
+    }
+
+    limit->offset = NULL;
+
+    return limit;
+}
+
+static struct LimitClause *parse_limit_clause(struct Parser *parser, struct Scanner *scanner) {
+    struct LimitClause *limit = new_limit_clause();
+
+    struct NewExpr *expr = parse_expression_new(parser, scanner);
+
+    if (parser->current.type == TOKEN_COMMA) {
+        advance(parser, scanner);
+        limit->offset = expr;
+        limit->limit  = parse_expression_new(parser, scanner);
+    } else if (parser->current.type == TOKEN_OFFSET) {
+        advance(parser, scanner);
+        limit->offset = parse_expression_new(parser, scanner);
+        limit->limit  = expr;
+    } else {
+        limit->limit  = expr;
+    }
+
+    return limit;
+}
+
 static struct SelectStatementNew *new_select_statement() {
     struct SelectStatementNew *stmt = malloc(sizeof(struct SelectStatementNew));
     if (!stmt) {
@@ -1570,11 +1617,76 @@ static struct SelectStatementNew *new_select_statement() {
         exit(1);
     }
 
+    stmt->order = NULL;
+    stmt->limit = NULL;
+
     return stmt;
 }
 
 static struct SelectStatementNew *parse_select_statement_new(struct Parser *parser, struct Scanner *scanner) {
-    // @TODO: implement
+    struct SelectStatementNew *stmt = new_select_statement();
+
+    if (parser->current.type == TOKEN_WITH) {
+
+    }
+
+    stmt->cores = vector_select_core_data_ptr_list_new();
+    
+    struct SelectCoreData core_data = {
+        .type = COMPOUND_OPERATOR_BASE,
+        .core = parse_select_core(parser, scanner)
+    };
+
+    vector_select_core_data_ptr_list_push(stmt->cores, &core_data);
+
+    while (is_compound_operator(parser)) {
+        enum CompoundOperatorType compound_type;
+
+        switch(parser->current.type) {
+            case TOKEN_UNION:
+                if (peek(parser, scanner, 1)->type == TOKEN_ALL) {
+                    advance(parser, scanner); // Consume 'UNION' so that next advance consumes 'ALL'
+                    compound_type = COMPOUND_OPERATOR_UNION_ALL;
+                } else {
+                    compound_type = COMPOUND_OPERATOR_UNION;
+                }
+                break;
+
+            case TOKEN_INTERSECT:
+                compound_type = COMPOUND_OPERATOR_INTERSECT;
+                break;
+
+            case TOKEN_EXCEPT:
+                compound_type = COMPOUND_OPERATOR_EXCEPT;
+                break;
+
+            default:
+                error_at_current(parser, "Expected 'UNION', 'INTERSECT' or 'EXCEPT'.");
+        }
+
+        advance(parser, scanner);
+
+        struct SelectCoreData core_data = {
+            .type = compound_type,
+            .core = parse_select_core(parser, scanner)
+        };
+
+        vector_select_core_data_ptr_list_push(stmt->cores, &core_data);
+    }
+
+    if (parser->current.type == TOKEN_ORDER) {
+        advance(parser, scanner);
+        consume(parser, scanner, TOKEN_BY, "Expected 'BY'.");
+        
+        stmt->order = collect_order_by_clauses(parser, scanner);
+    }
+
+    if (parser->current.type == TOKEN_LIMIT) {
+        consume(parser, scanner, TOKEN_LIMIT, "Expected 'LIMIT'.");
+        stmt->limit = parse_limit_clause(parser, scanner);
+    }
+
+    return stmt;
 }
 
 
@@ -1590,6 +1702,12 @@ static struct TableOrSubquery *new_table_or_subquery() {
     return tos;
 }
 
+static bool is_start_of_select(struct Parser *parser) {
+    return  parser->current.type == TOKEN_WITH
+            || parser->current.type == TOKEN_SELECT
+            || parser->current.type == TOKEN_VALUES;
+}
+
 static struct TableOrSubquery *parse_table_or_subquery(struct Parser *parser, struct Scanner *scanner) {
     struct TableOrSubquery *tos = new_table_or_subquery();
 
@@ -1602,23 +1720,23 @@ static struct TableOrSubquery *parse_table_or_subquery(struct Parser *parser, st
     }
 
     // table-function-name(
-    if (peek(parser, scanner, 1) == TOKEN_LEFT_PAREN) {
+    if (peek(parser, scanner, 1)->type == TOKEN_LEFT_PAREN) {
         tos->type           = TOS_TABLE_FUNCTION;
-        tos->table_function = tos_parse_table_function(parser, scanner, tos);
+        tos_parse_table_function(parser, scanner, tos);
         return tos;
     }
 
     // schema-name.table-function-name(
-    if (peek(parser, scanner, 1) == TOKEN_DOT &&
-        peek(parser, scanner, 3) == TOKEN_LEFT_PAREN) {
+    if (peek(parser, scanner, 1)->type == TOKEN_DOT &&
+        peek(parser, scanner, 3)->type == TOKEN_LEFT_PAREN) {
 
         tos->type           = TOS_TABLE_FUNCTION;
-        tos->table_function = tos_parse_table_function(parser, scanner, tos);
+        tos_parse_table_function(parser, scanner, tos);
         return tos;
     }
 
     tos->type       = TOS_TABLE_NAME;
-    tos->table_name = tos_parse_table_name(parser, scanner, tos);
+    tos_parse_table_name(parser, scanner, tos);
 
     return tos;
 }
@@ -1718,6 +1836,8 @@ static struct UnterminatedStringList *collect_unterminated_strings(struct Parser
         vector_unterminated_string_list_push(list, string);
         advance(parser, scanner);
     }
+
+    return list;
 }
 
 static struct JoinClause *new_join_clause() {
@@ -1738,7 +1858,7 @@ static struct JoinConstraint *parse_join_constraint(struct Parser *parser, struc
             advance(parser, scanner);
             join_constraint = new_join_constraint();
             join_constraint->type = JOIN_CONSTRAINT_ON;
-            join_constraint->expr = parse_expression(parser, scanner);
+            join_constraint->expr = parse_expression_new(parser, scanner);
             break;
 
         case TOKEN_USING:
@@ -1749,6 +1869,9 @@ static struct JoinConstraint *parse_join_constraint(struct Parser *parser, struc
             join_constraint->column_names   = collect_unterminated_strings(parser, scanner);
             consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
             break;
+
+        default:
+            error_at_current(parser, "Expected 'ON' or 'USING'.");
     }
 
     return join_constraint;
@@ -1775,8 +1898,10 @@ static struct JoinClause *parse_join_clause(struct Parser *parser, struct Scanne
         if (join_data->natural && join_data->constraint != NULL) {
             fprintf(stderr, "join_data->constraint should be NULL if join_data->natural == true.\n");
             exit(1);
-        }        
+        }
     }
+
+    return join_clause;
 }
 
 static struct TableExpression *new_table_expression() {
@@ -1964,6 +2089,28 @@ static struct NewExprPtrListPtrList *collect_values(struct Parser *parser, struc
     return list_of_lists;
 }
 
+static struct NewExprRowValue *new_row_value_expr() {
+    struct NewExprRowValue *row_value_epxr = malloc(sizeof(struct NewExprRowValue));
+    if (!row_value_epxr) {
+        fprintf(stderr, "new_row_value_expr: failed to malloc *row_value_expr.\n");
+        exit(1);
+    }
+
+    return row_value_epxr;
+}
+
+static struct NewExprRowValue *parse_row_value_expr(struct Parser *parser, struct Scanner *scanner) {
+    struct NewExprRowValue *row_value_expr = new_row_value_expr();
+
+    consume(parser, scanner, TOKEN_LEFT_PAREN, "Expected '('.");
+
+    row_value_expr->elements = collect_expressions(parser, scanner);
+
+    consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
+
+    return row_value_expr;
+}
+
 static struct SelectCore *new_select_core() {
     struct SelectCore *select_core = malloc(sizeof(struct SelectCore));
     if (!select_core) {
@@ -2013,7 +2160,7 @@ static struct SelectCore *parse_select_core(struct Parser *parser, struct Scanne
     }
 
     if (parser->current.type == TOKEN_WHERE) {
-        select_core->select.where = parse_from_clause(parser, scanner);
+        select_core->select.where = parse_where_clause(parser, scanner);
     }
 
     if (parser->current.type == TOKEN_GROUP) {
@@ -2031,13 +2178,17 @@ static struct SelectCore *parse_select_core(struct Parser *parser, struct Scanne
     return select_core;
 }
 
-static bool is_start_of_select(struct Parser *parser) {
-    return  parser->current.type == TOKEN_WITH
-            || parser->current.type == TOKEN_SELECT
-            || parser->current.type == TOKEN_VALUES;
+static struct NewExpr *new_new_expr() {
+    struct NewExpr *expr = malloc(sizeof(struct NewExpr));
+    if (!expr) {
+        fprintf(stderr, "new_new_expr: failed to malloc *expr.\n");
+        exit(1);
+    }
+
+    return expr;
 }
 
-static struct PrimaryExpr *parse_primary_expression(struct Parser *parser, struct Scanner *scanner) {
+static struct NewExpr *parse_primary_expression(struct Parser *parser, struct Scanner *scanner) {
     /* 
     Expect:
         Literal
@@ -2050,9 +2201,12 @@ static struct PrimaryExpr *parse_primary_expression(struct Parser *parser, struc
         EXISTS
         Case
         Raise
+
+    Todo:
+        bind parameter
     */
 
-    struct PrimaryExpr *expr = new_primary_expr();
+    struct NewExpr *expr = new_new_expr();
 
     struct UnterminatedString text = { .start = parser->current.start, .len = 0 }; // Update length later
 
@@ -2075,7 +2229,7 @@ static struct PrimaryExpr *parse_primary_expression(struct Parser *parser, struc
         case TOKEN_IDENTIFIER:
             if (peek(parser, scanner, 1)->type == TOKEN_LEFT_PAREN) {
                 // Function
-                expr->type      = EXPR_FUNCTION;
+                expr->type      = EXPR_FUNC;
                 expr->function  = parse_function(parser, scanner);
             } else {
                 // schema-name or table-name or column-name
@@ -2089,11 +2243,15 @@ static struct PrimaryExpr *parse_primary_expression(struct Parser *parser, struc
             advance(parser, scanner);
             if (is_start_of_select(parser))
                 {
+                    expr->type      = EXPR_SUBQUERY;
+                    expr->subquery  = parse_select_statement_new(parser, scanner);
                 // @TODO
                 // select-stmt
                 }
-            else if (peek(parser, scanner, 1) == TOKEN_COMMA){
+            else if (peek(parser, scanner, 1)->type == TOKEN_COMMA){
                 // row value expr
+                expr->type      = EXPR_ROW_VALUE;
+                expr->row_value = parse_row_value_expr(parser, scanner);
             } else {
                 // single expr
                 expr->type      = EXPR_GROUPING;
@@ -2113,7 +2271,7 @@ static struct PrimaryExpr *parse_primary_expression(struct Parser *parser, struc
 
         case TOKEN_RAISE:
             expr->type  = EXPR_RAISE;
-            expr->raise = parse_raise_function(parser, scanner);
+            expr->raise = parse_raise_expr(parser, scanner);
             break;
 
         default:
@@ -2125,54 +2283,352 @@ static struct PrimaryExpr *parse_primary_expression(struct Parser *parser, struc
     return expr;
 }
 
+#define CASE_PATTERN_MATCH             \
+        case TOKEN_LIKE:               \
+        case TOKEN_GLOB:               \
+        case TOKEN_REGEXP:             \
+        case TOKEN_MATCH:
+
+#define CASE_BINARY     \
+        case TOKEN_PLUS:
+
+#define CASE_NULL_COMP      \
+        case TOKEN_ISNULL:  \
+        case TOKEN_NOTNULL: \
+        case TOKEN_NULL:
+
+static inline struct UnterminatedString unterminated_string_from_current_token(struct Parser *parser) {
+            return (struct UnterminatedString){ .start = parser->current.start, .len = parser->current.length };
+        }
+
+static struct NewExprCollate *new_collate_expr() {
+    struct NewExprCollate *collate = malloc(sizeof(struct NewExprCollate));
+    if (!collate) {
+        fprintf(stderr, "new_collate_expr: failed to malloc *collate.\n");
+        exit(1);
+    }
+
+    return collate;
+}
+
+
+static struct NewExprCollate *parse_collate(struct Parser *parser, struct Scanner *scanner, struct NewExpr *primary_expr) {
+    consume(parser, scanner, TOKEN_COLLATE, "Expected 'COLLATE'.");
+    
+    struct NewExprCollate *collate = new_collate_expr();
+    collate->expr = primary_expr;
+    collate->collation_name = unterminated_string_from_current_token(parser);
+    consume(parser, scanner, TOKEN_IDENTIFIER, "Expected identifier.");
+
+    return collate;
+}
+
+static struct NewExprPatternMatch *new_pattern_match() {
+    struct NewExprPatternMatch *match = malloc(sizeof(struct NewExprPatternMatch));
+    if (!match) {
+        fprintf(stderr, "new_pattern_match: failed to malloc *match.\n");
+        exit(1);
+    }
+
+    match->escape = NULL;
+
+    return match;
+}
+
+static struct NewExprPatternMatch *parse_pattern_match(struct Parser *parser, struct Scanner *scanner, struct NewExpr *primary_expr, bool not) {
+    struct NewExprPatternMatch *match = new_pattern_match();
+
+    match->not  = not;
+    match->left = primary_expr;
+
+    // @TODO: must free
+    switch (parser->current.type) {
+
+        case TOKEN_GLOB:
+            match->type     = PATTERN_GLOB;
+            match->right    = parse_expression_new(parser, scanner);
+            break;
+
+        case TOKEN_REGEXP:
+            match->type     = PATTERN_REGEXP;
+            match->right    = parse_expression_new(parser, scanner);
+            break;
+
+        case TOKEN_MATCH:
+            match->type     = PATTERN_MATCH;
+            match->right    = parse_expression_new(parser, scanner);
+            break;
+
+        case TOKEN_LIKE:
+            match->type     = PATTERN_LIKE;
+            match->right    = parse_expression_new(parser, scanner);
+            if (parser->current.type == TOKEN_ESCAPE) {
+                advance(parser, scanner);
+                match->escape = parse_expression_new(parser, scanner);
+            }
+            break;
+
+        default:
+            error_at_current(parser, "Expected 'GLOB', 'REGEXP', 'MATCH' or 'LIKE'.");
+    }
+
+    return match;
+}
+
+static struct NewExprBinary *new_binary_expr() {
+    struct NewExprBinary *binary_expr = malloc(sizeof(struct NewExprBinary));
+    if (!binary_expr) {
+        fprintf(stderr, "new_binary_expr: failed to malloc *binary_expr.\n");
+        exit(1);
+    }
+
+    return binary_expr;
+}
+
+static struct NewExprBinary *parse_binary_expr(struct Parser *parser, struct Scanner *scanner, struct NewExpr *primary_expr) {
+    struct NewExprBinary *binary_expr = new_binary_expr();
+
+    binary_expr->left = primary_expr;
+
+    switch (parser->current.type) {
+        case TOKEN_EQUAL:
+            binary_expr->op = BIN_EQUAL;
+            break;
+
+        case TOKEN_GREATER:
+            binary_expr->op = BIN_GREATER;
+            break;
+
+        case TOKEN_LESS:
+            binary_expr->op = BIN_LESS;
+            break;
+
+        default:
+            error_at_current(parser, "Expected binary operator");
+    }
+
+    binary_expr->right = parse_expression_new(parser, scanner);
+
+    return binary_expr;
+}
+
+static struct NewExprNullComp *new_null_comp() {
+    struct NewExprNullComp *null_comp = malloc(sizeof(struct NewExprNullComp));
+    if (!null_comp) {
+        fprintf(stderr, "new_null_comp: failed to malloc *null_comp.\n");
+        exit(1);
+    }
+
+    return null_comp;
+}
+
+static struct NewExprNullComp *parse_null_comp(struct Parser *parser, struct Scanner *scanner, struct NewExpr *primary_expr) {
+    struct NewExprNullComp *null_comp = new_null_comp();
+
+    null_comp->expr = primary_expr;
+
+    switch (parser->current.type) {
+        case TOKEN_ISNULL:
+            null_comp->type = NULL_COMP_ISNULL;
+            break;
+
+        case TOKEN_NOTNULL:
+            null_comp->type = NULL_COMP_NOTNULL;
+            break;
+
+        case TOKEN_NULL: // Not has already been consumed
+            null_comp->type = NULL_COMP_NOTNULL;
+            break;
+
+        default:
+            error_at_current(parser, "Expected 'ISNULL', 'NOTNULL' or 'NOT'.");
+    }
+
+    advance(parser, scanner);
+
+    return null_comp;
+}
+
+static struct NewExprIs *new_is_expr() {
+    struct NewExprIs *is_expr = malloc(sizeof(struct NewExprIs));
+    if (!is_expr) {
+        fprintf(stderr, "new_is_expr: failed to malloc *is_expr.\n");
+        exit(1);
+    }
+
+    is_expr->not        = false;
+    is_expr->distinct   = false;
+
+    return is_expr;
+}
+
+static struct NewExprIs *parse_is_expr(struct Parser *parser, struct Scanner *scanner, struct NewExpr *primary_expr) {
+    struct NewExprIs *is_expr = new_is_expr();
+
+    consume(parser, scanner, TOKEN_IS, "Expected 'IS'.");
+
+    if (parser->current.type == TOKEN_NOT) {
+        is_expr->not = true;
+        advance(parser, scanner);
+    }
+
+    if (parser->current.type == TOKEN_DISTINCT) {
+        is_expr->distinct = true;
+        advance(parser, scanner);
+        consume(parser, scanner, TOKEN_FROM, "Expected 'FROM'.");
+    }
+
+    is_expr->left   = primary_expr;
+    is_expr->right  = parse_expression_new(parser, scanner);
+
+    return is_expr;
+}
+
+static struct NewExprBetween *new_between_epxr() {
+    struct NewExprBetween *between = malloc(sizeof(struct NewExprBetween));
+    if (!between) {
+        fprintf(stderr, "new_between_epxr: failed to malloc *between.\n");
+        exit(1);
+    }
+
+    return between;
+}
+
+static struct NewExprBetween *parse_between_expr(struct Parser *parser, struct Scanner *scanner, struct NewExpr *primary_expr, bool not) {
+    struct NewExprBetween *between = new_between_epxr();
+    between->not        = not;
+    between->primary    = primary_expr;
+
+    consume(parser, scanner, TOKEN_BETWEEN, "Expected 'BETWEEN'.");
+
+    between->left = parse_expression_new(parser, scanner);
+    consume(parser, scanner, TOKEN_AND, "Expected 'AND'.");
+    between->right = parse_expression_new(parser, scanner);
+
+    return between;
+}
+
+static void parse_secondary_expression(struct Parser *parser, struct Scanner *scanner, struct NewExpr *parent_expr) {
+    struct NewExpr *primary_expr = parse_primary_expression(parser, scanner);
+    
+    bool not = false;
+    if (parser->current.type == TOKEN_NOT) {
+        advance(parser, scanner);
+        not = true;
+    }
+
+    switch (parser->current.type) {
+        
+        case TOKEN_COLLATE:
+            parent_expr->type       = NEW_EXPR_COLLATE;
+            parent_expr->collate    = parse_collate(parser, scanner, primary_expr);
+            break;
+
+        CASE_PATTERN_MATCH
+            parent_expr->type           = NEW_EXPR_PATTERN_MATCH;
+            parent_expr->pattern_match  = parse_pattern_match(parser, scanner, primary_expr, not);
+            break;
+
+        CASE_BINARY
+            parent_expr->type           = NEW_EXPR_BINARY;
+            parent_expr->binary         = parse_binary_expr(parser, scanner, primary_expr);
+            break;
+
+        CASE_NULL_COMP
+            parent_expr->type           = NEW_EXPR_NULL_COMP;
+            parent_expr->null_comp      = parse_null_comp(parser, scanner, primary_expr);
+            break;
+
+        case TOKEN_IS:
+            parent_expr->type           = NEW_EXPR_IS;
+            parent_expr->is             = parse_is_expr(parser, scanner, primary_expr);
+            break;
+
+        case TOKEN_BETWEEN:
+            parent_expr->type           = NEW_EXPR_BETWEEN;
+            parent_expr->between        = parse_between_expr(parser, scanner, primary_expr, not);
+            break;
+
+        // @TODO: need to implement
+        case TOKEN_IN:
+            break;
+            
+        default:
+            error_at_current(parser, "Could not understand secondary expression.");
+
+    }
+}
+
 static struct NewExpr *parse_expression_new(struct Parser *parser, struct Scanner *scanner) {
     /* 
     Expect:
         Literal
         Bind parameter
         Schema-name or table-name or column-name
-        Unary operator
         Function-name -> (
         ( -> expr or ( -> select-stmt (TOKEN_WITH, TOKEN_SELECT, TOKEN_VALUES)
         Cast
-        NOT
+        NOT -> EXISTS
         EXISTS
         Case
         Raise
+
+    Todo:
+        bind parameter
     */
 
-    // Parse primary expression
+    struct NewExpr *expr = new_new_expr();
+
+    struct UnterminatedString text = { .start = parser->current.start, .len = 0 }; // Update length later
+
     switch (parser->current.type) {
         CASE_LITERAL
-            parse_literal(parser, scanner);
-            break;
-
-        CASE_UNARY
-            parse_unary(parser, scanner);
+            expr->type      = EXPR_LITERAL;
+            expr->literal   = parse_literal(parser, scanner);
             break;
         
         case TOKEN_CAST:
+            expr->type      = EXPR_CAST;
+            expr->cast      = parse_cast(parser, scanner);
             break;
 
         case TOKEN_CASE:
+            expr->type      = EXPR_CASE;
+            expr->expr_case = parse_case(parser, scanner);
             break;
 
         case TOKEN_IDENTIFIER:
             if (peek(parser, scanner, 1)->type == TOKEN_LEFT_PAREN) {
                 // Function
+                expr->type      = EXPR_FUNC;
+                expr->function  = parse_function(parser, scanner);
             } else {
                 // schema-name or table-name or column-name
+                expr->type = EXPR_NAME;
+                expr->name = parse_name(parser, scanner);
             }
+
             break;
 
         case TOKEN_LEFT_PAREN: // Can have both (expr) and (select-stmt)
-            if (is_start_of_select(parser)) 
+            advance(parser, scanner);
+            if (is_start_of_select(parser))
                 {
+                    expr->type      = EXPR_SUBQUERY;
+                    expr->subquery  = parse_select_statement_new(parser, scanner);
+                // @TODO
                 // select-stmt
                 }
-            else {
-                // expr-list
+            else if (peek(parser, scanner, 1)->type == TOKEN_COMMA){
+                // row value expr
+                expr->type == EXPR_ROW_VALUE;
+                expr->row_value = parse_row_value_expr(parser, scanner);
+            } else {
+                // single expr
+                expr->type      = EXPR_GROUPING;
+                expr->grouping  = parse_grouping(parser, scanner);
             }
+            consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'.");
             break;
 
         case TOKEN_NOT:
@@ -2185,9 +2641,17 @@ static struct NewExpr *parse_expression_new(struct Parser *parser, struct Scanne
             break;
 
         case TOKEN_RAISE:
+            expr->type  = EXPR_RAISE;
+            expr->raise = parse_raise_expr(parser, scanner);
             break;
 
         default:
-            error_at_current(parser, "Expected Primary Expression");
+            // Must start with expr
+            parse_secondary_expression(parser, scanner, expr);
+            break;
     }
+
+    text.len = parser->previous.start - text.start + parser->previous.length;
+    expr->text = text;
+    return expr;
 }

@@ -55,7 +55,7 @@ int command_sql(struct Pager *pager, const char *command) {
     fprintf(stderr, "Parsing SQL statement\n");
 
     struct Parser parser;
-    parser_init(&parser);
+    parser_init(&parser, DEFAULT_ARENA_CAPACITY);
     
     struct TriePool *reserved_words_pool = init_reserved_words();
     fprintf(stderr, "RW inited\n");
