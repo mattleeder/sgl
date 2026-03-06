@@ -230,12 +230,151 @@ struct IndexComparisonArray *get_index_comparisons(struct ExprList *expr_list) {
 ////
 void print_new_select_statement_to_stderr(struct SelectStatementNew *stmt, int padding);
 void print_join_clause_to_stderr(struct JoinClause *join, int padding);
+void print_new_expr_to_stderr(struct NewExpr *expr, int padding);
 
 void print_us_with_prefix_to_stderr(struct UnterminatedString *string, char *prefix, int padding) {
     if (!string) {
         return;
     }
-    fprintf(stderr, "%*s%s: %.*s\n", padding, "", prefix, (int)string->len, string->start);
+    fprintf(stderr, "%*s%s\"%.*s\"\n", padding, "", prefix, (int)string->len, string->start);
+}
+
+void print_literal_number_to_stderr(struct LiteralNumber *number, int padding) {
+    if (!number) {
+        return;
+    }
+
+    fprintf(stderr, "%*sValue: %lld\n", padding, "", number->value);
+}
+
+void print_literal_string_to_stderr(struct LiteralString *string, int padding) {
+    if (!string) {
+        return;
+    }
+
+    fprintf(stderr, "%*sValue: %.*s\n", padding, "", (int)string->value.len, string->value.start);
+}
+
+void print_literal_boolean_to_stderr(struct LiteralBoolean *boolean, int padding) {
+    if (!boolean) {
+        return;
+    }
+
+    if (boolean) {
+        fprintf(stderr, "%*sValue: True\n", padding, "");
+    } else {
+        fprintf(stderr, "%*sValue: False\n", padding, "");
+    }
+}
+
+void print_literal_blob_to_stderr(struct LiteralBlob *blob, int padding) {
+    if (!blob) {
+        return;
+    }
+
+    fprintf(stderr, "%*sValue: ", padding, "");
+    for (size_t i = 0; i < blob->length; i++) {
+        fprintf(stderr, "%02X ", blob->value[i]);
+    }
+    fprintf(stderr, "\n");
+}
+
+void print_literal_expr_to_stderr(struct NewExprLiteral *literal, int padding) {
+    if (!literal) {
+        return;
+    }
+
+    fprintf(stderr, "%*sLiteral Expression\n", padding, "");
+    print_us_with_prefix_to_stderr(&literal->text, "Text: ", padding + 4);
+
+    switch(literal->type) {
+        case LITERAL_NUMBER:
+            fprintf(stderr, "%*sLiteral Type: Number\n", padding + 4, "");
+            print_literal_number_to_stderr(&literal->number, padding + 4);
+            break;
+
+        case LITERAL_STRING:
+            fprintf(stderr, "%*sLiteral Type: String\n", padding + 4, "");
+            print_literal_string_to_stderr(&literal->string, padding + 4);
+            break;
+
+        case LITERAL_NULL:
+            fprintf(stderr, "%*sLiteral Type: Null\n", padding + 4, "");
+            fprintf(stderr, "%*sValue: Null\n", padding + 4, "");
+            break;
+
+        case LITERAL_CURRENT_TIME:
+            fprintf(stderr, "%*sLiteral Type: Current Time\n", padding + 4, "");
+            break;
+
+        case LITERAL_CURRENT_DATE:
+            fprintf(stderr, "%*sLiteral Type: Current Date\n", padding + 4, "");
+            break;
+
+        case LITERAL_CURRENT_TIMESTAMP:
+            fprintf(stderr, "%*sLiteral Type: Current Timestamp\n", padding + 4, "");
+            break;
+
+        case LITERAL_BOOLEAN:
+            fprintf(stderr, "%*sLiteral Type: Boolean\n", padding + 4, "");
+            print_literal_boolean_to_stderr(&literal->boolean, padding + 4);
+            break;
+
+        case LITERAL_BLOB:
+            fprintf(stderr, "%*sLiteral Type: Blob\n", padding + 4, "");
+            print_literal_blob_to_stderr(&literal->blob, padding + 4);
+            break;
+
+        default:
+            fprintf(stderr, "%*sLiteral Type: Unknown\n", padding + 4, "");
+            exit(1);
+
+    }
+}
+
+void print_qualified_name_to_stderr(struct QualifiedName *name, int padding) {
+    if (!name) {
+        return;
+    }
+
+    fprintf(stderr, "%*sQualified Name %zu parts\n", padding, "", name->count);
+    
+    for (size_t i = 0; i < name->count; i++) {
+        struct UnterminatedString part = name->parts[i];
+        fprintf(stderr, "%*sPart %zu: \"%.*s\"\n", padding + 4, "", i, (int)part.len, part.start);
+    }
+}
+
+void print_new_binary_expr_to_stderr(struct NewExprBinary *binary, int padding) {
+    if (!binary) {
+        return;
+    }
+
+    fprintf(stderr, "%*sBinary Expression\n", padding, "");
+
+    switch (binary->op) {
+        case BIN_EQUAL:
+            fprintf(stderr, "%*sOp: Equal\n", padding + 4, "");
+            break;
+        
+        case BIN_LESS:
+            fprintf(stderr, "%*sOp: Less\n", padding + 4, "");
+            break;
+
+        case BIN_GREATER:
+            fprintf(stderr, "%*sOp: Greater\n", padding + 4, "");
+            break;
+
+        default:
+            fprintf(stderr, "%*sOp: Unknown\n", padding + 4, "");
+            exit(1);
+    }
+
+    fprintf(stderr, "%*sLeft\n", padding + 4, "");
+    print_new_expr_to_stderr(binary->left, padding + 4);
+
+    fprintf(stderr, "%*sRight\n", padding + 4, "");
+    print_new_expr_to_stderr(binary->right, padding + 4);
 }
 
 void print_new_expr_to_stderr(struct NewExpr *expr, int padding) {
@@ -244,35 +383,116 @@ void print_new_expr_to_stderr(struct NewExpr *expr, int padding) {
     }
 
     fprintf(stderr, "%*sExpression\n", padding, "");
-    fprintf(stderr, "%*sPrinting Not Implemented\n", padding + 4, "");
+    
 
     // @TODO: implement
+    switch (expr->type) {
+        case EXPR_LITERAL:
+            print_literal_expr_to_stderr(expr->literal, padding + 4);
+            break;
+
+        case EXPR_BIND:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case EXPR_NAME:
+            print_qualified_name_to_stderr(expr->name, padding + 4);
+            break;
+
+        case EXPR_FUNC:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case EXPR_CAST:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case EXPR_SUBQUERY:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case EXPR_ROW_VALUE:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case EXPR_GROUPING:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case EXPR_EXISTS:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case EXPR_CASE:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case EXPR_RAISE:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case NEW_EXPR_UNARY:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case NEW_EXPR_BINARY:
+            print_new_binary_expr_to_stderr(expr->binary, padding + 4);
+            break;
+
+        case NEW_EXPR_COLLATE:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case NEW_EXPR_PATTERN_MATCH:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case NEW_EXPR_NULL_COMP:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case NEW_EXPR_IS:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case NEW_EXPR_BETWEEN:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        case NEW_EXPR_IN:
+            fprintf(stderr, "%*s Printing Not Implemented\n", padding + 4, "");
+            break;
+
+        default:
+            fprintf(stderr, "%*sUnknown Expression Type %d\n", padding + 4, "", expr->type);
+            exit(1);
+    }
 }
 
 void print_compound_operator_type_to_stderr(enum CompoundOperatorType type, int padding) {
     switch (type) {
         case COMPOUND_OPERATOR_BASE:
-            fprintf(stderr, "%*sOperator: BASE\n", padding + 4, "");
+            fprintf(stderr, "%*sOperator: BASE\n", padding, "");
             break;
 
         case COMPOUND_OPERATOR_UNION:
-            fprintf(stderr, "%*sOperator: UNION\n", padding + 4, "");
+            fprintf(stderr, "%*sOperator: UNION\n", padding, "");
             break;
 
         case COMPOUND_OPERATOR_UNION_ALL:
-            fprintf(stderr, "%*sOperator: UNION ALL\n", padding + 4, "");
+            fprintf(stderr, "%*sOperator: UNION ALL\n", padding, "");
             break;
 
         case COMPOUND_OPERATOR_INTERSECT:
-            fprintf(stderr, "%*sOperator: INTERSECT\n", padding + 4, "");
+            fprintf(stderr, "%*sOperator: INTERSECT\n", padding, "");
             break;
 
         case COMPOUND_OPERATOR_EXCEPT:
-            fprintf(stderr, "%*sOperator: EXCEPT\n", padding + 4, "");
+            fprintf(stderr, "%*sOperator: EXCEPT\n", padding, "");
             break;
 
         default:
-            fprintf(stderr, "%*sOperator: UNKNOWN %d\n", padding + 4, "", type);
+            fprintf(stderr, "%*sOperator: UNKNOWN %d\n", padding, "", type);
             exit(1);
     }
 }
@@ -335,7 +555,7 @@ void print_table_name_to_stderr(struct TableName *table_name, int padding) {
         return;
     }
 
-    fprintf(stderr, "%*sTable Or Subquery\n", padding, "");
+    fprintf(stderr, "%*sTable Name\n", padding, "");
 
     switch (table_name->index_mode) {
         case TABLE_INDEX_AUTO:

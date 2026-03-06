@@ -540,6 +540,15 @@ struct NewExprPatternMatch {
     struct NewExpr          *escape; // Only if PATTERN_LIKE
 };
 
+enum UnaryOp {
+    UNARY_PLUS
+};
+
+struct NewExprUnary {
+    enum UnaryOp   op;
+    struct NewExpr  *expr;
+};
+
 struct NewExprBinary {
     enum BinaryOp   op;
     struct NewExpr  *left;

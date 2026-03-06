@@ -2009,13 +2009,25 @@ static struct NewExpr *parse_primary_expression(struct Parser *parser, struct Sc
         case TOKEN_REGEXP:             \
         case TOKEN_MATCH:
 
-#define CASE_BINARY     \
-        case TOKEN_PLUS:
+#define CASE_BINARY         \
+        case TOKEN_EQUAL:   \
+        case TOKEN_LESS:    \
+        case TOKEN_GREATER:
 
 #define CASE_NULL_COMP      \
         case TOKEN_ISNULL:  \
         case TOKEN_NOTNULL: \
         case TOKEN_NULL:
+
+static bool is_binary(enum TokenType token_type) {
+    switch (token_type) {
+        CASE_BINARY
+            return true;
+
+        default:
+            return false;
+    }
+}
 
 
 static struct NewExprCollate *parse_collate(struct Parser *parser, struct Scanner *scanner, struct NewExpr *primary_expr) {
@@ -2173,6 +2185,52 @@ static struct NewExprBetween *parse_between_expr(struct Parser *parser, struct S
     return node;
 }
 
+static struct NewExprBinary *parse_new_binary_expr(struct Parser *parser, struct Scanner *scanner, struct NewExpr *left) {
+    struct NewExprBinary temp = { .left = left };
+
+    switch (parser->current.type) {
+        case TOKEN_EQUAL:
+            temp.op = BIN_EQUAL;
+            break;
+
+        case TOKEN_LESS:
+            temp.op = BIN_LESS;
+            break;
+
+        case TOKEN_GREATER:
+            temp.op = BIN_GREATER;
+            break;
+        
+        default:
+            error_at_current(parser, "Expected '=', '<' or '>'.");
+    }
+
+    advance(parser, scanner);
+
+    temp.right = parse_expression_new(parser, scanner);
+
+    struct NewExprBinary *node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct NewExprBinary);
+    *node = temp;
+    return node;
+}
+
+static struct NewExprUnary *parse_new_unary_expr(struct Parser *parser, struct Scanner *scanner) {
+    struct NewExprUnary temp = {0};
+
+    switch (parser->current.type) {
+        case TOKEN_PLUS:
+            temp.op = UNARY_PLUS;
+            break;
+
+        default:
+            error_at_current(parser, "Expected '+'.");
+    }
+
+    struct NewExprUnary *node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct NewExprUnary);
+    *node = temp;
+    return node;
+}
+
 static void parse_secondary_expression(struct Parser *parser, struct Scanner *scanner, struct NewExpr *parent_expr) {
     struct NewExpr *primary_expr = parse_primary_expression(parser, scanner);
     
@@ -2250,6 +2308,11 @@ static struct NewExpr *parse_expression_new(struct Parser *parser, struct Scanne
             temp.type      = EXPR_LITERAL;
             temp.literal   = parse_literal(parser, scanner);
             break;
+
+        CASE_UNARY
+            temp.type      = EXPR_UNARY;
+            temp.unary     = parse_new_unary_expr(parser, scanner);
+            break;
         
         case TOKEN_CAST:
             temp.type      = EXPR_CAST;
@@ -2314,6 +2377,17 @@ static struct NewExpr *parse_expression_new(struct Parser *parser, struct Scanne
             parse_secondary_expression(parser, scanner, &temp);
             break;
     }
+
+    // Check for binary
+    if (is_binary(parser->current.type)) {
+        fprintf(stderr, "BINARY BINARY BINARY BINARY\n");
+        struct NewExpr *left_node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct NewExpr);
+        *left_node = temp;
+
+        temp.type   = NEW_EXPR_BINARY;
+        temp.binary = parse_new_binary_expr(parser, scanner, left_node);
+    }
+    
 
     text.len = parser->previous.start - text.start + parser->previous.length;
     temp.text = text;
