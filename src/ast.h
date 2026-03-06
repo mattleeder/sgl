@@ -180,7 +180,6 @@ struct NewExprBind {
 };
 
 enum SortType {
-    SORT_NONE,
     SORT_ASC,
     SORT_DESC
 };
@@ -402,8 +401,8 @@ struct JoinConstraint {
     enum JoinConstraintType type;
 
     union {
-        struct NewExpr                  *expr;
-        struct UnterminatedStringList   *column_names;
+        struct NewExpr                  *expr;          // If JOIN_CONSTRAINT_ON
+        struct UnterminatedStringList   *column_names;  // If JOIN_CONSTRAINT_USING
     };
 
 };
@@ -485,12 +484,12 @@ struct SelectCore {
 
         struct {
             bool distinct;
-            struct ResultColumnPtrList *result_columns;
-            struct FromClause       *from;
-            struct WhereClause      *where;
-            struct GroupByClause    *group_by;
-            struct HavingClause     *having;
-            struct WindowClause     *window;
+            struct ResultColumnPtrList  *result_columns;
+            struct FromClause           *from;
+            struct WhereClause          *where;
+            struct GroupByClause        *group_by;
+            struct HavingClause         *having;
+            struct WindowClause         *window;
         } select;
 
     };
@@ -639,4 +638,6 @@ DEFINE_VECTOR(struct UnterminatedString, UnterminatedStringList, unterminated_st
 DEFINE_VECTOR(struct WindowData *, WindowDataPtrList, window_data_ptr_list)
 DEFINE_VECTOR(struct NewExprPtrList *, NewExprPtrListPtrList, new_expr_ptr_list_ptr_list)
 DEFINE_VECTOR(struct SelectCoreData *, SelectCoreDataPtrList, select_core_data_ptr_list)
+
+void print_new_select_statement_to_stderr(struct SelectStatementNew *stmt, int padding);
 #endif

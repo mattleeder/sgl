@@ -28,5 +28,5 @@ struct SelectStatement *parse(struct Parser *parser, const char *source, struct 
 struct Columns *parse_create(struct Parser *parser, const char *source, struct TriePool *reserved_words_pool);
 struct CreateIndexStatement *parse_create_index(struct Parser *parser, const char *source, struct TriePool *reserved_words_pool);
 
-struct SelectStatementNew *parse_select_statement_new(struct Parser *parser, struct Scanner *scanner);
+struct SelectStatementNew *parse_new(struct Parser *parser, const char *source, struct TriePool *reserved_words_pool);
 #endif

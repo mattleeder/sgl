@@ -545,6 +545,10 @@ static struct NewExpr *parse_expression_new(struct Parser *parser, struct Scanne
 static struct TableExpression *parse_table_expression(struct Parser *parser, struct Scanner *scanner);
 static struct SelectCore *parse_select_core(struct Parser *parser, struct Scanner *scanner);
 
+static inline struct UnterminatedString unterminated_string_from_current_token(struct Parser *parser) {
+    return (struct UnterminatedString){ .start = parser->current.start, .len = parser->current.length };
+}
+
 static bool match(struct Parser *parser, struct Scanner *scanner, enum TokenType token_type) {
     if (parser->current.type != token_type) {
         return false;
@@ -666,7 +670,7 @@ struct LiteralBlob hex_string_to_bytes(const char *str, size_t len) {
         low  = char_to_decimal[(unsigned char)str[str_idx++]];
 
         if (high > 15 || low > 15) {
-            fprintf(stderr, "Invalid hex characer %.*s\n", 2, str[str_idx - 2]);
+            fprintf(stderr, "Invalid hex characer %.*s\n", 2, &str[str_idx - 2]);
             exit(1);
         }
 
@@ -791,7 +795,7 @@ static struct NewExprCast *parse_cast(struct Parser *parser, struct Scanner *sca
     temp.cast_type = parse_type_name(parser, scanner);
     consume(parser, scanner, TOKEN_RIGHT_PAREN, "Expected ')'");
 
-    struct NewExprCast *node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct NewExprCast)
+    struct NewExprCast *node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct NewExprCast);
     *node = temp;
     return node;
 }
@@ -833,7 +837,7 @@ static struct NewExprCase *parse_case(struct Parser *parser, struct Scanner *sca
 static struct OrderByClause *parse_order_by_clause(struct Parser *parser, struct Scanner *scanner) {
 
     struct OrderByClause temp = {
-        .sort_type        = SORT_NONE,
+        .sort_type        = SORT_ASC,
         .collate_type     = COLLATE_NONE,
         .nulls_position   = NULLS_NONE,
         .expr             = NULL
@@ -863,7 +867,7 @@ static struct OrderByClause *parse_order_by_clause(struct Parser *parser, struct
 
     }
 
-    struct OrderByClause *node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct OrderByClause)
+    struct OrderByClause *node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct OrderByClause);
     *node = temp;
     return node;
 }
@@ -1092,7 +1096,7 @@ static struct WindowDefinition *parse_window_definition(struct Parser *parser, s
 
     // Check for base-window-name
     if (parser->current.type == TOKEN_IDENTIFIER) {
-        temp.base_window = new_unterminated_string();
+        temp.base_window = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct UnterminatedString);
 
         temp.base_window->start    = parser->current.start;
         temp.base_window->len      = parser->current.length;
@@ -1132,7 +1136,7 @@ static struct OverClause *parse_over_clause(struct Parser *parser, struct Scanne
     if (parser->current.type == TOKEN_IDENTIFIER) {
         temp.type = OVER_REFERENCED;
         
-        temp.referenced_window = new_unterminated_string();
+        temp.referenced_window = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct UnterminatedString);
         temp.referenced_window->start  = parser->current.start;
         temp.referenced_window->len    = parser->current.length;
 
@@ -1325,7 +1329,7 @@ static void tos_parse_alias(struct Parser *parser, struct Scanner *scanner, stru
     
     if (parser->current.type == TOKEN_IDENTIFIER) {
         // @TODO: are all following identifiers aliases?
-        tos->alias        = new_unterminated_string();
+        tos->alias        = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct UnterminatedString);
         tos->alias->start = parser->current.start;
         tos->alias->len   = parser->current.length;
         consume(parser, scanner, TOKEN_IDENTIFIER, "Expected identifier.");
@@ -1340,7 +1344,7 @@ static void tos_parse_table_name(struct Parser *parser, struct Scanner *scanner,
     if (peek(parser, scanner, 1)->type == TOKEN_DOT) {
         advance(parser, scanner);
         
-        temp.schema_name         = new_unterminated_string();
+        temp.schema_name         = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct UnterminatedString);
         temp.schema_name->start  = parser->current.start;
         temp.schema_name->len    = parser->current.length;
 
@@ -1358,7 +1362,7 @@ static void tos_parse_table_name(struct Parser *parser, struct Scanner *scanner,
         consume(parser, scanner, TOKEN_BY, "Expected 'BY'.");
 
         temp.index_mode           = TABLE_INDEX_NAMED;
-        temp.index_name           = new_unterminated_string();
+        temp.index_name           = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct UnterminatedString);
         temp.index_name->start    = parser->current.start;
         temp.index_name->len      = parser->current.length;
 
@@ -1368,7 +1372,7 @@ static void tos_parse_table_name(struct Parser *parser, struct Scanner *scanner,
         consume(parser, scanner, TOKEN_INDEXED, "Expected 'INDEXED'.");
 
         temp.index_mode           = TABLE_INDEX_NONE;
-        temp.index_name           = new_unterminated_string();
+        temp.index_name           = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct UnterminatedString);
         temp.index_name->start    = parser->current.start;
         temp.index_name->len      = parser->current.length;
 
@@ -1392,7 +1396,7 @@ static void tos_parse_table_function(struct Parser *parser, struct Scanner *scan
     if (peek(parser, scanner, 1)->type == TOKEN_DOT) {
         advance(parser, scanner);
         
-        temp.schema_name         = new_unterminated_string();
+        temp.schema_name         = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct UnterminatedString);
         temp.schema_name->start  = parser->current.start;
         temp.schema_name->len    = parser->current.length;
 
@@ -1516,7 +1520,7 @@ struct SelectStatementNew *parse_select_statement_new(struct Parser *parser, str
         temp.limit = parse_limit_clause(parser, scanner);
     }
 
-    struct SelectStatementNew *node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct SelectStatementNew)
+    struct SelectStatementNew *node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct SelectStatementNew);
     *node = temp;
     return node;
 }
@@ -1847,20 +1851,7 @@ static struct NewExprRowValue *parse_row_value_expr(struct Parser *parser, struc
 }
 
 static struct SelectCore *parse_select_core(struct Parser *parser, struct Scanner *scanner) {
-    struct SelectCore temp = {
-        .select = {
-            .distinct    = false,
-            .from        = NULL,
-            .where       = NULL,
-            .group_by    = NULL,
-            .having      = NULL,
-            .window      = NULL,
-        },
-
-        .values = {
-            .values     = NULL
-        }
-    };
+    struct SelectCore temp = {0};
 
     if (match(parser, scanner, TOKEN_VALUES)) {
         consume(parser, scanner, TOKEN_LEFT_PAREN, "Expected '('.");
@@ -2022,9 +2013,6 @@ static struct NewExpr *parse_primary_expression(struct Parser *parser, struct Sc
         case TOKEN_NOTNULL: \
         case TOKEN_NULL:
 
-static inline struct UnterminatedString unterminated_string_from_current_token(struct Parser *parser) {
-    return (struct UnterminatedString){ .start = parser->current.start, .len = parser->current.length };
-}
 
 static struct NewExprCollate *parse_collate(struct Parser *parser, struct Scanner *scanner, struct NewExpr *primary_expr) {
     consume(parser, scanner, TOKEN_COLLATE, "Expected 'COLLATE'.");
@@ -2035,7 +2023,7 @@ static struct NewExprCollate *parse_collate(struct Parser *parser, struct Scanne
     temp.collation_name = unterminated_string_from_current_token(parser);
     consume(parser, scanner, TOKEN_IDENTIFIER, "Expected identifier.");
 
-    struct NewExprCollate *node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct NexExprCollat);
+    struct NewExprCollate *node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct NewExprCollate);
     *node = temp;
     return node;
 }
@@ -2293,7 +2281,7 @@ static struct NewExpr *parse_expression_new(struct Parser *parser, struct Scanne
                 }
             else if (peek(parser, scanner, 1)->type == TOKEN_COMMA){
                 // row value expr
-                temp.type == EXPR_ROW_VALUE;
+                temp.type = EXPR_ROW_VALUE;
                 temp.row_value = parse_row_value_expr(parser, scanner);
             } else {
                 // single expr
@@ -2329,4 +2317,16 @@ static struct NewExpr *parse_expression_new(struct Parser *parser, struct Scanne
     struct NewExpr *node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct NewExpr);
     *node = temp;
     return node;
+}
+
+struct SelectStatementNew *parse_new(struct Parser *parser, const char *source, struct TriePool *reserved_words_pool) {
+
+    struct Scanner scanner;
+
+    init_scanner(&scanner, source, reserved_words_pool);
+
+    advance(parser, &scanner);
+    struct SelectStatementNew *select_stmt = parse_select_statement_new(parser, &scanner);
+
+    return select_stmt;
 }
