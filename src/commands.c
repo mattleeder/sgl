@@ -63,11 +63,11 @@ int command_sql(struct Pager *pager, const char *command) {
     struct SelectStatement *select_stmt = parse(&parser, command, reserved_words_pool);
     print_select_statement_to_stderr(select_stmt, 4);
 
-    // struct Parser parser_new;
-    // parser_init(&parser_new, DEFAULT_ARENA_CAPACITY);
-    // struct SelectStatementNew *select_stmt_new = parse_new(&parser_new, command, reserved_words_pool);
+    struct Parser parser_new;
+    parser_init(&parser_new, DEFAULT_ARENA_CAPACITY);
+    struct SelectStatementNew *select_stmt_new = parse_new(&parser_new, command, reserved_words_pool);
 
-    // print_new_select_statement_to_stderr(select_stmt_new, 4);
+    print_new_select_statement_to_stderr(select_stmt_new, 4);
 
     struct Plan *plan = build_plan(pager, select_stmt);
     plan_execute(pager, plan);

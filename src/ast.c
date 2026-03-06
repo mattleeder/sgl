@@ -272,7 +272,7 @@ void print_compound_operator_type_to_stderr(enum CompoundOperatorType type, int 
             break;
 
         default:
-            fprintf(stderr, "%*sOperator: UNKNOWN\n", padding + 4, "");
+            fprintf(stderr, "%*sOperator: UNKNOWN %d\n", padding + 4, "", type);
             exit(1);
     }
 }

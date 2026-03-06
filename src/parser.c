@@ -1463,17 +1463,20 @@ struct SelectStatementNew *parse_select_statement_new(struct Parser *parser, str
     };
 
     if (parser->current.type == TOKEN_WITH) {
-
+        // @TODO: implement
     }
 
     temp.cores = vector_select_core_data_ptr_list_new();
     
-    struct SelectCoreData core_data = {
+    struct SelectCoreData core_temp = {
         .type = COMPOUND_OPERATOR_BASE,
         .core = parse_select_core(parser, scanner)
     };
 
-    vector_select_core_data_ptr_list_push(temp.cores, &core_data);
+    struct SelectCoreData *core_node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct SelectCoreData);
+    *core_node = core_temp;
+
+    vector_select_core_data_ptr_list_push(temp.cores, core_node);
 
     while (is_compound_operator(parser)) {
         enum CompoundOperatorType compound_type;
@@ -1502,12 +1505,13 @@ struct SelectStatementNew *parse_select_statement_new(struct Parser *parser, str
 
         advance(parser, scanner);
 
-        struct SelectCoreData core_data = {
-            .type = compound_type,
-            .core = parse_select_core(parser, scanner)
-        };
+        core_temp.type = compound_type;
+        core_temp.core = parse_select_core(parser, scanner);
 
-        vector_select_core_data_ptr_list_push(temp.cores, &core_data);
+        core_node = ARENA_ALLOC_TYPE_CHECKED(&parser->arena, struct SelectCoreData);
+        *core_node = core_temp;
+
+        vector_select_core_data_ptr_list_push(temp.cores, core_node);
     }
 
     if (match(parser, scanner, TOKEN_ORDER)) {
