@@ -89,6 +89,15 @@ void *arena_alloc_aligned(struct ArenaAllocator *arena, size_t size, size_t alig
     return ptr;
 }
 
+void *arena_alloc_aligned_checked(struct ArenaAllocator *arena, size_t size, size_t alignment) {
+    void *ptr = arena_alloc_aligned(arena, size, alignment);
+    if (!ptr) {
+        fprintf(stderr, "arena_alloc_aligned_checked: got NULL ptr.\n");
+        exit(1);
+    }
+    return ptr;
+}
+
 void arena_reset(struct ArenaAllocator *arena) {
     arena->offset = 0;
 }
