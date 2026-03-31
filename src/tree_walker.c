@@ -469,7 +469,7 @@ struct TreeWalker *new_tree_walker(struct Pager *pager, uint32_t root_page, stru
 }
 
 bool produce_rowid(struct TreeWalker *walker, struct Row *row, uint64_t *next_rowid) {
-    fprintf(stderr, "produce_rowid\n");
+    // fprintf(stderr, "produce_rowid\n");
     bool rowid_valid = false;
     while (walker->index_list->count > 0) {
         struct SubWalker *last_sub_walker = walker->index_list->data[walker->index_list->count - 1];
@@ -484,7 +484,7 @@ bool produce_rowid(struct TreeWalker *walker, struct Row *row, uint64_t *next_ro
 bool produce_row(struct TreeWalker *walker, struct Row *row) {
     uint64_t next_rowid = walker->current_rowid;
 
-    fprintf(stderr, "Find rowid\n");
+    // fprintf(stderr, "Find rowid\n");
     if (walker->index_list != NULL) {
         if (walker->index_list->count == 0) {
             return false;
@@ -496,19 +496,19 @@ bool produce_row(struct TreeWalker *walker, struct Row *row) {
         }
     }
 
-    fprintf(stderr, "Next rowid: %zu, current rowid: %zu\n", next_rowid, walker->current_rowid);
+    // fprintf(stderr, "Next rowid: %zu, current rowid: %zu\n", next_rowid, walker->current_rowid);
     if (next_rowid < walker->current_rowid) {
-        fprintf(stderr, "Next rowid: %zu is less than current rowid %zu.\n", next_rowid, walker->current_rowid);
+        // fprintf(stderr, "Next rowid: %zu is less than current rowid %zu.\n", next_rowid, walker->current_rowid);
         return false;
     }
     walker->current_rowid = next_rowid;
 
     if (walker->table_list->count == 0) {
-        fprintf(stderr, "No table walkers\n");
+        // fprintf(stderr, "No table walkers\n");
         return false;
     }
 
-    fprintf(stderr, "Search in table tree for rowid: %zu\n", next_rowid);
+    // fprintf(stderr, "Search in table tree for rowid: %zu\n", next_rowid);
     bool row_valid = false;
     while (walker->table_list->count > 0) {
         struct SubWalker *last_sub_walker = walker->table_list->data[walker->table_list->count - 1];

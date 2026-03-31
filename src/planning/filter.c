@@ -175,7 +175,7 @@ bool filter_next(struct Pager *pager, struct Filter *filter, struct Row *row) {
     // Filter rows based on predicate
     // @TODO: doesnt need to filter rows already filtered by index
     while (plan_next(pager, filter->child, row)) {
-        fprintf(stderr, "Filter\n");
+        // fprintf(stderr, "Filter\n");
         bool predicate_success = true;
 
         for (size_t i = 0; i < filter->predicates->count; i++) {
